@@ -828,7 +828,8 @@ class GeneralPipeline:
             batch_size=self.batch_size, 
             shuffle=train,
             generator=generator if train else None,
-            num_workers=0  # Ensure deterministic behavior
+            num_workers=0 , # Ensure deterministic behavior
+            drop_last=True if train else False
         )
         assert isinstance(loader.dataset, Sized), "Dataset must be Sized for len() to work."
         return loader
