@@ -143,27 +143,6 @@ class VisionTransformer(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-
-class YOLOv5(nn.Module):
-    """YOLOv5 model adapted for image classification tasks."""
-
-    def __init__(self, num_classes: int = 2, pretrained: bool = True):
-        super().__init__()
-        import torch as _torch
-
-        # Use the classification variant provided by Ultralytics
-        self.model = _torch.hub.load(
-            "ultralytics/yolov5", "yolov5s-cls", pretrained=pretrained
-        )
-        if self.model.model[-1].out_features != num_classes:
-            self.model.model[-1] = nn.Linear(
-                self.model.model[-1].in_features, num_classes
-            )
-
-    def forward(self, x):
-        return self.model(x)
-
-
 class CLIPClassifier(nn.Module):
     """Fine-tuned CLIP vision encoder with a linear classification head."""
 
@@ -183,14 +162,62 @@ class CLIPClassifier(nn.Module):
         return x
 
 
+class Qwen2VLQLoRA(nn.Module):
+    """QLoRA fine-tuning wrapper for the Qwen 2.5 Vision-Language model."""
+
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen2.5-VL-2B-Instruct",
+        num_classes: int = 2,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.05,
+    ):
+        super().__init__()
+        from transformers import AutoProcessor, AutoModelForCausalLM, BitsAndBytesConfig
+        from peft import LoraConfig, get_peft_model
+
+        import torch as _torch
+
+        self.processor = AutoProcessor.from_pretrained(model_name)
+
+        quant_cfg = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=_torch.bfloat16 if _torch.cuda.is_available() else _torch.float16,
+        )
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            quantization_config=quant_cfg,
+            device_map="auto",
+        )
+
+        lora_cfg = LoraConfig(
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            bias="none",
+            target_modules="all-linear",
+        )
+        self.model = get_peft_model(self.model, lora_cfg)
+        self.num_classes = num_classes
+
+    def forward(self, images, prompts):
+        inputs = self.processor(images=images, text=prompts, return_tensors="pt").to(self.model.device)
+        output = self.model(**inputs)
+        return output.logits[:, -1, : self.num_classes]
+
+
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "simple_cnn": SimpleCNN,
     "dropout_cnn": DropoutCNN,
     "residual_cnn": ResidualCNN,
     "resnet50": ResNet50,
     "vision_transformer": VisionTransformer,
-    "yolov5": YOLOv5,
     "clip_classifier": CLIPClassifier,
+    "qwen2_vl_qlora": Qwen2VLQLoRA,
 }
 
 
