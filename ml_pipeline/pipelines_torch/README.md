@@ -13,6 +13,7 @@ This module provides a unified, extensible framework for training, evaluating, a
 
 ### 🧩 Model Registry
 - **Plug-and-play models**: Register and instantiate models by name (MLP, XGBoost, LightGBM, RandomForest, HuggingFace LoRA/QLoRA, Llama.cpp, etc.).
+- **Vision models**: Comprehensive computer vision models from lightweight CNNs to foundation models (ResNet, ViT, CLIP, Qwen2-VL)
 - **Custom wrappers**: All models are wrapped for compatibility with the pipeline interface.
 - **Easy extensibility**: Add new models by registering in `MODEL_REGISTRY`.
 
@@ -32,14 +33,17 @@ This module provides a unified, extensible framework for training, evaluating, a
 ```
 pipelines_torch/
 ├── __init__.py
-├── base.py         # GeneralPipeline, GeneralPipelineSklearn
-├── benchmark.py    # BenchmarkRunner (grid search, result aggregation)
-├── models.py       # Model registry and wrappers
+├── base.py           # GeneralPipeline, GeneralPipelineSklearn
+├── benchmark.py      # BenchmarkRunner (grid search, result aggregation)
+├── models.py         # Model registry and wrappers (tabular/text models)
+├── vision_models.py  # Computer vision model registry (CNNs, ViTs, CLIP, multimodal)
 ```
 
 ---
 
 ## Model Registry
+
+The model registry provides easy access to a comprehensive collection of models spanning different architectures and modalities. Models are organized by task type and complexity level.
 
 ### Classification Models
 - `mlp_classifier`, `deep_mlp_classifier`: PyTorch MLPs (configurable depth, batchnorm, dropout)
@@ -57,6 +61,28 @@ pipelines_torch/
 - `hf_lora_regressor`, `hf_qlora_regressor`: HuggingFace LoRA/QLoRA (text)
 - `llama_cpp_regressor`: Llama.cpp adapter (text)
 
+### Vision Models (`vision_models.py`)
+Specialized computer vision models for image classification and analysis tasks:
+
+#### Lightweight CNNs
+- `simple_cnn`: Fast, minimal CNN for quick experiments (3→16→32 conv layers, ~64 final dense)
+- `dropout_cnn`: Deeper CNN with GELU activations and dropout regularization (32→64 conv layers, 256 dense)
+
+#### Advanced Architectures
+- `residual_cnn`: Small ResNet-inspired network with residual connections and batch normalization
+- `resnet50`: Transfer learning with ResNet-50 backbone (ImageNet pretrained by default)
+- `vision_transformer`: ViT-B/16 Vision Transformer (ImageNet pretrained by default)
+
+#### Multimodal & Foundation Models
+- `clip_classifier`: Fine-tuned CLIP vision encoder with frozen features + trainable linear head
+- `qwen2_vl_qlora`: QLoRA fine-tuning for Qwen 2.5 Vision-Language model (4-bit quantization, LoRA adapters)
+
+#### Usage Example
+```python
+from pipelines_torch.vision_models import get_model
+model = get_model('resnet50', num_classes=3, pretrained=True)
+```
+
 ---
 
 ## Usage Examples
@@ -64,8 +90,13 @@ pipelines_torch/
 ### 1. Select and Instantiate a Model
 
 ```python
+# Tabular/text models
 from pipelines_torch.models import MODEL_REGISTRY
 model = MODEL_REGISTRY['mlp_classifier'](input_dim=..., num_classes=...)
+
+# Vision models
+from pipelines_torch.vision_models import get_model
+vision_model = get_model('resnet50', num_classes=3, pretrained=True)
 ```
 
 ### 2. Build a Pipeline

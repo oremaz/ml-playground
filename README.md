@@ -1,5 +1,5 @@
 
-# Food Prediction & Benchmarking Suite (`food_preds`)
+# Food Prediction & Benchmarking Suite (`ml_pipeline`)
 
 Comprehensive machine learning experimentation and benchmarking suite for food-related prediction tasks, including recipe difficulty, meal type, nutrient regression, and cooking time estimation. This directory provides modular pipelines, advanced data augmentation, model registries, and reproducible workflows for robust ML experimentation.
 
@@ -24,6 +24,8 @@ Comprehensive machine learning experimentation and benchmarking suite for food-r
 - **Model registry**: Plug-and-play support for MLP, XGBoost, LightGBM, RandomForest, HuggingFace LoRA/QLoRA, Llama.cpp, and more (`models.py`)
 - **K-fold CV & ensembling**: Built-in cross-validation, weight averaging, and metrics tracking
 - **Flexible metrics**: Custom and standard metrics for classification/regression
+- **Consistent epoch selection**: Centralized logic in `utils/utils.py` ensures perfect consistency between training weight selection and result reporting
+- **Smart early stopping**: Combined score (50/50 weighted validation loss + primary metric) for robust convergence
 
 ### 📊 Utilities & Visualization
 - **Data loading/splitting**: Robust, stratified, and reproducible splits (`utils/data.py`)
@@ -36,7 +38,7 @@ Comprehensive machine learning experimentation and benchmarking suite for food-r
 ## Directory Structure
 
 ```
-food_preds/
+ml_pipeline/
 ├── benchmark_results.ipynb         # End-to-end ML workflow notebook
 ├── recipes_df*.csv                 # Datasets (main and test splits)
 ├── data_augmentation/              # All augmentation modules and docs
@@ -55,7 +57,7 @@ food_preds/
 ├── utils/                          # Utilities for data, metrics, reproducibility
 │   ├── data.py
 │   ├── metrics.py
-│   ├── utils.py
+│   ├── utils.py                    # Core utilities + centralized epoch selection logic
 │   ├── visualization.py
 ```
 
