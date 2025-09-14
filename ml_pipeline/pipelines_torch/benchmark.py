@@ -5,7 +5,7 @@ import random
 import numpy as np
 import torch
 from pipelines_torch.base import GeneralPipeline
-from utils.utils import save_model, save_metrics
+from utils.utils import save_model, save_metrics, select_best_epoch
 
 def set_all_seeds(seed: int):
     """Set random seed for all libraries to ensure reproducibility."""
@@ -208,13 +208,12 @@ class BenchmarkRunner:
                 })
 
     def _process_single_fold_results(self, results: List[Dict], model_name: str, aug_name: str, history: List[Dict]):
-        """Process results from single-fold training."""
-        val_losses = [h.get('val_loss', None) for h in history]
-        valid_epochs = [(i, v) for i, v in enumerate(val_losses) if v is not None]
-        if not valid_epochs:
-            raise RuntimeError(f"No valid validation loss found for model {model_name} with augmentation {aug_name}.")
+        """Process results from single-fold training using centralized epoch selection logic."""
+        if not history:
+            raise RuntimeError(f"No training history found for model {model_name} with augmentation {aug_name}.")
         
-        best_epoch = min(valid_epochs, key=lambda x: x[1])[0]
+        # Use centralized epoch selection logic
+        best_epoch = select_best_epoch(history, self.task_type)
         best_metrics = history[best_epoch]
         
         # Add train_loss, val_loss, and f1_score as metrics

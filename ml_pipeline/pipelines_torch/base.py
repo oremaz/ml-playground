@@ -10,6 +10,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
 import sys
 import os
+from utils.utils import select_best_epoch, calculate_combined_score_for_epoch
 
 
 class GeneralPipelineSklearn:
@@ -782,6 +783,20 @@ class GeneralPipeline:
         
         return averaged_weights
 
+    def _select_best_epoch(self) -> int:
+        """
+        Select best epoch using centralized logic from utils.utils.
+        This ensures consistency across all components.
+        """
+        return select_best_epoch(self.history, self.task_type)
+
+    def _calculate_combined_score_for_epoch(self, target_epoch: int) -> float:
+        """
+        Calculate combined score for a specific epoch using centralized logic from utils.utils.
+        Used for early stopping to ensure consistency.
+        """
+        return calculate_combined_score_for_epoch(self.history, target_epoch, self.task_type)
+
     def _reset_model(self):
         """Reset model weights and optimizer for k-fold training."""
         # Re-initialize model weights
@@ -890,10 +905,11 @@ class GeneralPipeline:
         train_loader: DataLoader = self.prepare_data_internal(X_train, y_train, train=True)
         val_loader: Optional[DataLoader] = self.prepare_data_internal(X_val, y_val, train=False) if X_val is not None and y_val is not None else None
         
-        best_score = float('inf')  # For loss-based fallback
-        best_f1_score = 0.0
         best_weights = None
         patience = 0
+        best_epoch = 0  # Track which epoch was selected as best
+        epoch_weights = []  # Store weights from each epoch for post-training selection
+        best_combined_score = float('inf')  # For combined score early stopping
         
         for epoch in range(self.epochs):
             self.model.train()
@@ -955,52 +971,27 @@ class GeneralPipeline:
                     metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
                     metrics_dict[metric_key] = metric(targets, preds)
                 
-                # Combined score for early stopping based on loss
-                score = 0.2 * train_loss + 0.8 * val_loss
+                # Store raw scores in history - selection logic will be applied post-training
+                # This ensures consistency between training and BenchmarkRunner selection
                 
-                # Early stopping logic - use F1 for classification, R² for regression
-                improved = False
-                
-                # Check loss-based improvement
-                loss_improved = score < best_score
-                f1_improved = False
-                r2_improved = False
-                
-                # Check metric-based improvement (F1 for classification, R² for regression)
-                if self.task_type == "classification":
-                    f1_improved = current_f1 > best_f1_score
-                    if f1_improved:
-                        best_f1_score = current_f1
-                else:  # regression
-                    r2_improved = current_r2 > best_f1_score  # Reusing best_f1_score variable for best R²
-                    if r2_improved:
-                        best_f1_score = current_r2  # Store best R² in best_f1_score variable
-                
-                # Save weights based on best metric score
-                if self.task_type == "classification":
-                    # For classification: save weights when F1 improves
-                    if f1_improved:
-                        best_weights = self.model.state_dict()
-                else:
-                    # For regression: save weights when R² improves
-                    if r2_improved:
-                        best_weights = self.model.state_dict()
-                
-                # Combined improvement: either loss improved OR metric improved
-                if loss_improved or (self.task_type == "classification" and f1_improved) or (self.task_type == "regression" and r2_improved):
-                    patience = 0
-                    improved = True
-                else:
-                    patience += 1
-                
-                # Early stopping condition
-                if self.early_stopping and patience >= self.early_stopping:
-                    if self.task_type == "classification":
-                        stop_reason = "loss and F1 score plateau"
-                    else:  # regression
-                        stop_reason = "loss and R² score plateau"
-                    print(f"Early stopping at epoch {epoch+1} due to {stop_reason}")
-                    break
+                # Early stopping based on combined score (consistent with final selection)
+                if self.early_stopping and len(self.history) >= 2:  # Need at least 2 epochs for comparison
+                    # Calculate combined score for current epoch using same logic as _select_best_epoch
+                    current_combined_score = self._calculate_combined_score_for_epoch(len(self.history) - 1)
+                    
+                    if len(self.history) == 1:
+                        best_combined_score = current_combined_score
+                        patience = 0
+                    else:
+                        if current_combined_score < best_combined_score:
+                            best_combined_score = current_combined_score
+                            patience = 0
+                        else:
+                            patience += 1
+                    
+                    if patience >= self.early_stopping:
+                        print(f"Early stopping at epoch {epoch+1} due to combined score plateau")
+                        break
             
             # Print progress
             progress_str = f"Epoch {epoch+1}/{self.epochs} - Train Loss: {train_loss:.4f}"
@@ -1023,10 +1014,26 @@ class GeneralPipeline:
                 epoch_metrics["r2_score"] = current_r2
             epoch_metrics.update(metrics_dict)
             self.history.append(epoch_metrics)
+            
+            # Store weights from this epoch for potential selection later
+            epoch_weights.append({name: param.clone().detach().cpu() for name, param in self.model.state_dict().items()})
+        
+        # Post-training: Apply selection logic to determine best epoch and weights
+        if self.history and epoch_weights:
+            best_epoch = self._select_best_epoch()
+            print(f"Selected best epoch: {best_epoch + 1} based on combined score")
+            
+            # Use weights from the selected best epoch
+            if best_epoch < len(epoch_weights):
+                best_weights = epoch_weights[best_epoch]
+            else:
+                best_weights = epoch_weights[-1]  # Fallback to last epoch
         
         # Restore best weights after training
         if best_weights is not None:
-            self.model.load_state_dict(best_weights)
+            # Move weights to correct device and load into model  
+            state_dict = {name: weight.to(self.device) for name, weight in best_weights.items()}
+            self.model.load_state_dict(state_dict)
         
         # Save model after training if requested
         self.save_model_after_training()
