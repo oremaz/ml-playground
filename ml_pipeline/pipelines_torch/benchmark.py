@@ -85,7 +85,8 @@ class BenchmarkRunner:
             self.save_path = f"results/{self.path_start}"
             # Create the path if it doesn't exist
             import os
-            os.makedirs(self.save_path, exist_ok=True)
+            if not os.path.exists(self.save_path):
+                os.makedirs(self.save_path, exist_ok=True)
         for model_cfg in tqdm(self.model_configs, desc="Models"):
             model_name = model_cfg["name"]
             model_class = model_cfg["class"]
