@@ -68,6 +68,7 @@ class BenchmarkRunner:
         # Set all random seeds for reproducibility
         set_all_seeds(self.random_state)
 
+    
     def run(self, X, y) -> pd.DataFrame:
         """
         Run benchmark with given data.
@@ -80,6 +81,8 @@ class BenchmarkRunner:
             DataFrame with benchmark results
         """
         results = []
+        if self.path_start: 
+            self.save_path = f"results/{self.path_start}"
         for model_cfg in tqdm(self.model_configs, desc="Models"):
             model_name = model_cfg["name"]
             model_class = model_cfg["class"]
