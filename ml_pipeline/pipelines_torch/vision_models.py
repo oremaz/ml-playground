@@ -29,28 +29,37 @@ class SimpleCNN(nn.Module):
         return x
 
 
-class DropoutCNN(nn.Module):
-    """A deeper CNN with GELU activations and dropout for regularisation."""
+class AdaptiveCNN(nn.Module):
+    """CNN that adapts to different input sizes using adaptive pooling with modern GELU activations."""
 
-    def __init__(self, num_classes: int = 2):
+    def __init__(self, num_classes: int = 2, input_channels: int = 3):
         super().__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.Conv2d(input_channels, 32, kernel_size=3, padding=1),
             nn.GELU(),
             nn.Conv2d(32, 32, kernel_size=3, padding=1),
             nn.GELU(),
             nn.MaxPool2d(2),
             nn.Dropout(0.25),
+            
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.GELU(),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.GELU(),
             nn.MaxPool2d(2),
             nn.Dropout(0.25),
+            
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.AdaptiveAvgPool2d((4, 4)),  # Adaptive pooling to fixed size
+            nn.Dropout(0.25),
         )
+        
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64 * 8 * 8, 256),
+            nn.Linear(128 * 4 * 4, 256),
             nn.GELU(),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes),
@@ -105,12 +114,14 @@ class ResidualCNN(nn.Module):
 
 
 class ResNet50(nn.Module):
-    """Transfer learning using a ResNet-50 backbone pretrained on ImageNet."""
+    """Transfer learning using a ResNet-50 backbone pretrained on ImageNet with adaptive input size."""
 
-    def __init__(self, num_classes: int = 2, pretrained: bool = True):
+    def __init__(self, num_classes: int = 2, pretrained: bool = True, input_size: int = 224):
         super().__init__()
         from torchvision import models
 
+        self.input_size = input_size
+        
         try:  # torchvision >= 0.13
             self.model = models.resnet50(
                 weights=models.ResNet50_Weights.DEFAULT if pretrained else None
@@ -121,16 +132,22 @@ class ResNet50(nn.Module):
         self.model.fc = nn.Linear(in_features, num_classes)
 
     def forward(self, x):
+        # If input size doesn't match expected size (224), resize it
+        if x.shape[-1] != 224 or x.shape[-2] != 224:
+            x = torch.nn.functional.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
         return self.model(x)
 
 
 class VisionTransformer(nn.Module):
-    """Vision Transformer (ViT-B/16) with optional ImageNet pretraining."""
+    """Vision Transformer (ViT-B/16) with optional ImageNet pretraining and adaptive input size."""
 
-    def __init__(self, num_classes: int = 2, pretrained: bool = True):
+    def __init__(self, num_classes: int = 2, pretrained: bool = True, input_size: int = 224):
         super().__init__()
         from torchvision import models
+        import torch.nn.functional as F
 
+        self.input_size = input_size
+        
         try:
             self.model = models.vit_b_16(
                 weights=models.ViT_B_16_Weights.DEFAULT if pretrained else None
@@ -141,15 +158,19 @@ class VisionTransformer(nn.Module):
         self.model.heads.head = nn.Linear(in_features, num_classes)
 
     def forward(self, x):
+        # If input size doesn't match expected size (224), resize it
+        if x.shape[-1] != 224 or x.shape[-2] != 224:
+            x = torch.nn.functional.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
         return self.model(x)
 
 class CLIPClassifier(nn.Module):
-    """Fine-tuned CLIP vision encoder with a linear classification head."""
+    """Fine-tuned CLIP vision encoder with a linear classification head and adaptive input size."""
 
-    def __init__(self, num_classes: int = 2, model_name: str = "ViT-B/32"):
+    def __init__(self, num_classes: int = 2, model_name: str = "ViT-B/32", input_size: int = 224):
         super().__init__()
         import clip  # type: ignore
 
+        self.input_size = input_size
         clip_model, _ = clip.load(model_name, device="cpu", jit=False)
         self.visual = clip_model.visual
         for param in self.visual.parameters():
@@ -157,6 +178,9 @@ class CLIPClassifier(nn.Module):
         self.classifier = nn.Linear(self.visual.output_dim, num_classes)
 
     def forward(self, x):
+        # CLIP models typically expect 224x224 inputs
+        if x.shape[-1] != 224 or x.shape[-2] != 224:
+            x = torch.nn.functional.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
         x = self.visual(x)
         x = self.classifier(x)
         return x
@@ -212,7 +236,7 @@ class Qwen2VLQLoRA(nn.Module):
 
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "simple_cnn": SimpleCNN,
-    "dropout_cnn": DropoutCNN,
+    "adaptive_cnn": AdaptiveCNN,
     "residual_cnn": ResidualCNN,
     "resnet50": ResNet50,
     "vision_transformer": VisionTransformer,

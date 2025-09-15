@@ -66,21 +66,31 @@ Specialized computer vision models for image classification and analysis tasks:
 
 #### Lightweight CNNs
 - `simple_cnn`: Fast, minimal CNN for quick experiments (3→16→32 conv layers, ~64 final dense)
-- `dropout_cnn`: Deeper CNN with GELU activations and dropout regularization (32→64 conv layers, 256 dense)
+- `adaptive_cnn`: Modern CNN with GELU activations, dropout regularization, and adaptive pooling for any input size (32→64→128 conv layers)
 
 #### Advanced Architectures
 - `residual_cnn`: Small ResNet-inspired network with residual connections and batch normalization
-- `resnet50`: Transfer learning with ResNet-50 backbone (ImageNet pretrained by default)
-- `vision_transformer`: ViT-B/16 Vision Transformer (ImageNet pretrained by default)
+- `resnet50`: Transfer learning with ResNet-50 backbone (ImageNet pretrained by default, auto-resizes input to 224x224)
+- `vision_transformer`: ViT-B/16 Vision Transformer (ImageNet pretrained by default, auto-resizes input to 224x224)
 
 #### Multimodal & Foundation Models
-- `clip_classifier`: Fine-tuned CLIP vision encoder with frozen features + trainable linear head
+- `clip_classifier`: Fine-tuned CLIP vision encoder with frozen features + trainable linear head (auto-resizes input to 224x224)
 - `qwen2_vl_qlora`: QLoRA fine-tuning for Qwen 2.5 Vision-Language model (4-bit quantization, LoRA adapters)
 
 #### Usage Example
 ```python
 from pipelines_torch.vision_models import get_model
+
+# For small images (e.g., 32x32 CIFAR-like data)
+model = get_model('adaptive_cnn', num_classes=3)  # Handles any input size
+
+# For ImageNet-style transfer learning (auto-resizes to 224x224)
 model = get_model('resnet50', num_classes=3, pretrained=True)
+
+# For Vision Transformer (auto-resizes to 224x224)
+model = get_model('vision_transformer', num_classes=3, pretrained=True)
+
+# All models automatically handle input size mismatches through interpolation
 ```
 
 ---
