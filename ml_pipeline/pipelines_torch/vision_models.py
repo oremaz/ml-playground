@@ -138,52 +138,44 @@ class ResNet50(nn.Module):
         return self.model(x)
 
 
-class VisionTransformer(nn.Module):
-    """Vision Transformer (ViT-B/16) with optional ImageNet pretraining and adaptive input size."""
-
-    def __init__(self, num_classes: int = 2, pretrained: bool = True, input_size: int = 224):
-        super().__init__()
-        from torchvision import models
-        import torch.nn.functional as F
-
-        self.input_size = input_size
-        
-        try:
-            self.model = models.vit_b_16(
-                weights=models.ViT_B_16_Weights.DEFAULT if pretrained else None
-            )
-        except AttributeError:
-            self.model = models.vit_b_16(pretrained=pretrained)
-        in_features = self.model.heads.head.in_features
-        self.model.heads.head = nn.Linear(in_features, num_classes)
-
-    def forward(self, x):
-        # If input size doesn't match expected size (224), resize it
-        if x.shape[-1] != 224 or x.shape[-2] != 224:
-            x = torch.nn.functional.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
-        return self.model(x)
-
 class CLIPClassifier(nn.Module):
-    """Fine-tuned CLIP vision encoder with a linear classification head and adaptive input size."""
+    """Fine-tuned CLIP vision encoder with a linear classification head using Hugging Face transformers."""
 
-    def __init__(self, num_classes: int = 2, model_name: str = "ViT-B/32", input_size: int = 224):
+    def __init__(self, num_classes: int = 2, model_name: str = "openai/clip-vit-base-patch32", input_size: int = 224):
         super().__init__()
-        import clip  # type: ignore
+        try:
+            from transformers import CLIPVisionModel, CLIPProcessor
+        except ImportError:
+            raise ImportError(
+                "transformers is required for CLIPClassifier. Install with: pip install transformers"
+            )
 
         self.input_size = input_size
-        clip_model, _ = clip.load(model_name, device="cpu", jit=False)
-        self.visual = clip_model.visual
-        for param in self.visual.parameters():
+        self.processor = CLIPProcessor.from_pretrained(model_name)
+        self.vision_model = CLIPVisionModel.from_pretrained(model_name)
+        
+        # Freeze the vision model parameters
+        for param in self.vision_model.parameters():
             param.requires_grad = False
-        self.classifier = nn.Linear(self.visual.output_dim, num_classes)
+            
+        # Add classification head
+        hidden_size = self.vision_model.config.hidden_size
+        self.classifier = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        # CLIP models typically expect 224x224 inputs
+        # Convert tensor to PIL images for processor
+        # Assuming x is in range [0, 1] or already normalized
         if x.shape[-1] != 224 or x.shape[-2] != 224:
             x = torch.nn.functional.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
-        x = self.visual(x)
-        x = self.classifier(x)
-        return x
+        
+        # Process through CLIP vision model
+        # Note: This expects input in the format expected by CLIP (RGB, normalized)
+        vision_outputs = self.vision_model(pixel_values=x)
+        pooled_output = vision_outputs.pooler_output  # [batch_size, hidden_size]
+        
+        # Classification
+        logits = self.classifier(pooled_output)
+        return logits
 
 
 class Qwen2VLQLoRA(nn.Module):
@@ -239,7 +231,6 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "adaptive_cnn": AdaptiveCNN,
     "residual_cnn": ResidualCNN,
     "resnet50": ResNet50,
-    "vision_transformer": VisionTransformer,
     "clip_classifier": CLIPClassifier,
     "qwen2_vl_qlora": Qwen2VLQLoRA,
 }
