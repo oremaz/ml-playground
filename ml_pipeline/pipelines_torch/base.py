@@ -1127,9 +1127,14 @@ class GeneralPipeline:
         if save_path is None:
             raise ValueError("No save path provided. Set save_path in __init__ or pass path parameter.")
         
+        # If save_path is a directory, create a default filename
+        if os.path.isdir(save_path) or not save_path.endswith('.pt'):
+            model_name = getattr(self.model, '__class__', type(self.model)).__name__
+            filename = f"{model_name}_model.pt"
+            save_path = os.path.join(save_path, filename)
+        
         # Create directory if it doesn't exist
-        if not os.path.exists(os.path.dirname(save_path)):
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         
         # Save model state dict
         torch.save({
