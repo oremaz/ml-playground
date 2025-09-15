@@ -162,7 +162,7 @@ class BenchmarkRunner:
                     print(f"Computed class weights: {pipeline.class_weights}")
                 
                 # Save model weights if specified
-                save_model(pipeline.model, f"{model_name}_{aug_name}", path_start=self.path_start)
+                #save_model(pipeline.model, f"{model_name}_{aug_name}", path_start=self.path_start)
                 
                 # Save metrics
                 save_metrics(training_history, model_name, aug_name, path_start=self.path_start)
