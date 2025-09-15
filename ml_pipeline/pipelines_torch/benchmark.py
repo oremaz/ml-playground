@@ -32,7 +32,6 @@ class BenchmarkRunner:
         batch_size: int = 32,
         early_stopping: Optional[int] = None,
         use_class_weights: bool = True,
-        save_path: Optional[str] = None,  # Path to save model weights
         save_to_hf: bool = False,  # Whether to save to HuggingFace Hub
         hf_repo_name: Optional[str] = None,  # HuggingFace repository name
         hf_token: Optional[str] = None,  # HuggingFace token
@@ -54,7 +53,6 @@ class BenchmarkRunner:
         self.batch_size = batch_size
         self.early_stopping = early_stopping
         self.use_class_weights = use_class_weights
-        self.save_path = save_path
         self.save_to_hf = save_to_hf
         self.hf_repo_name = hf_repo_name
         self.hf_token = hf_token
@@ -157,8 +155,7 @@ class BenchmarkRunner:
                     print(f"Computed class weights: {pipeline.class_weights}")
                 
                 # Save model weights if specified
-                if self.save_path:
-                    save_model(pipeline.model, f"{model_name}_{aug_name}", path_start=self.path_start)
+                save_model(pipeline.model, f"{model_name}_{aug_name}", path_start=self.path_start)
                 
                 # Save metrics
                 save_metrics(training_history, model_name, aug_name, path_start=self.path_start)
