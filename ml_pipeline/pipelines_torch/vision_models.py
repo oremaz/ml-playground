@@ -116,7 +116,7 @@ class ResidualCNN(nn.Module):
 class ResNet50(nn.Module):
     """Transfer learning using a ResNet-50 backbone pretrained on ImageNet with adaptive input size."""
 
-    def __init__(self, num_classes: int = 2, pretrained: bool = True, input_size: int = 224):
+    def __init__(self, num_classes: int = 2, pretrained: bool = True, input_size: int = 224, freeze_backbone: bool = True):
         super().__init__()
         from torchvision import models
 
@@ -128,6 +128,13 @@ class ResNet50(nn.Module):
             )
         except AttributeError:  # older torchvision versions
             self.model = models.resnet50(pretrained=pretrained)
+        
+        # Optionally freeze backbone for faster training
+        if freeze_backbone:
+            for name, param in self.model.named_parameters():
+                if 'fc' not in name:  # Don't freeze the final classification layer
+                    param.requires_grad = False
+        
         in_features = self.model.fc.in_features
         self.model.fc = nn.Linear(in_features, num_classes)
 
@@ -141,7 +148,7 @@ class ResNet50(nn.Module):
 class CLIPClassifier(nn.Module):
     """Fine-tuned CLIP vision encoder with a linear classification head using Hugging Face transformers."""
 
-    def __init__(self, num_classes: int = 2, model_name: str = "openai/clip-vit-base-patch32", input_size: int = 224):
+    def __init__(self, num_classes: int = 2, model_name: str = "openai/clip-vit-base-patch32", input_size: int = 224, unfreeze_layers: int = 0):
         super().__init__()
         try:
             from transformers import CLIPVisionModel, CLIPProcessor
@@ -154,9 +161,27 @@ class CLIPClassifier(nn.Module):
         self.processor = CLIPProcessor.from_pretrained(model_name)
         self.vision_model = CLIPVisionModel.from_pretrained(model_name)
         
-        # Freeze the vision model parameters
+        # Freeze all vision model parameters first
         for param in self.vision_model.parameters():
             param.requires_grad = False
+        
+        # Optionally unfreeze the last N transformer layers for fine-tuning
+        if unfreeze_layers > 0:
+            # Get the transformer layers (encoder.layers)
+            encoder_layers = self.vision_model.vision_model.encoder.layers
+            total_layers = len(encoder_layers)
+            
+            # Unfreeze the last N layers
+            for i in range(max(0, total_layers - unfreeze_layers), total_layers):
+                for param in encoder_layers[i].parameters():
+                    param.requires_grad = True
+            
+            # Also unfreeze the final layer norm
+            if hasattr(self.vision_model.vision_model, 'post_layernorm'):
+                for param in self.vision_model.vision_model.post_layernorm.parameters():
+                    param.requires_grad = True
+            
+            print(f"Unfroze last {unfreeze_layers} transformer layers for fine-tuning")
             
         # Add classification head
         hidden_size = self.vision_model.config.hidden_size

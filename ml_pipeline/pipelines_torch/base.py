@@ -397,6 +397,7 @@ class GeneralPipeline:
         k_folds: int = 5,  # Number of folds for k-fold CV
         max_factor: float = 2.0,  # Data augmentation factor (majority_count / final_minority_count)
         random_state: int = 42,  # Random seed for reproducibility
+        use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
     ):
         # If dropout is provided and model supports it, set it
         if dropout is not None and hasattr(model, 'net'):
@@ -430,6 +431,16 @@ class GeneralPipeline:
         self.k_folds = k_folds
         self.max_factor = max_factor
         self.random_state = random_state
+        self.use_mixed_precision = use_mixed_precision
+        
+        # Initialize mixed precision training
+        if self.use_mixed_precision and device != "cpu":
+            from torch.cuda.amp import GradScaler, autocast
+            self.scaler = GradScaler()
+            self.autocast = autocast
+        else:
+            self.scaler = None
+            self.autocast = None
         self.history = []
         self.train_losses = []
         self.val_losses = []
@@ -918,12 +929,25 @@ class GeneralPipeline:
                 Xb, yb = batch
                 Xb, yb = Xb.to(self.device), yb.to(self.device)
                 self.optimizer.zero_grad()
-                outputs = self.model(Xb)
-                if self.task_type == "regression":
-                    outputs = outputs.squeeze()
-                loss = loss_fn(outputs, yb)
-                loss.backward()
-                self.optimizer.step()
+                
+                # Use mixed precision if available
+                if self.scaler is not None and self.autocast is not None:
+                    with self.autocast():
+                        outputs = self.model(Xb)
+                        if self.task_type == "regression":
+                            outputs = outputs.squeeze()
+                        loss = loss_fn(outputs, yb)
+                    self.scaler.scale(loss).backward()
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    outputs = self.model(Xb)
+                    if self.task_type == "regression":
+                        outputs = outputs.squeeze()
+                    loss = loss_fn(outputs, yb)
+                    loss.backward()
+                    self.optimizer.step()
+                    
                 train_loss += loss.item() * Xb.size(0)
             train_loss /= len(cast(TensorDataset, train_loader.dataset))
             self.train_losses.append(train_loss)

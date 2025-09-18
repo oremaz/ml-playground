@@ -43,6 +43,7 @@ class BenchmarkRunner:
         path_start: Optional[str] = None,  # Subfolder within results directory for organizing experiments
         max_factor: float = 2.0,  # Data augmentation factor (majority_count / final_minority_count)
         random_state: int = 42,  # Random seed for reproducibility
+        use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
     ):
         self.model_configs = model_configs
         self.augmentations = augmentations
@@ -64,6 +65,7 @@ class BenchmarkRunner:
         self.path_start = path_start
         self.max_factor = max_factor
         self.random_state = random_state
+        self.use_mixed_precision = use_mixed_precision
         
         # Set all random seeds for reproducibility
         set_all_seeds(self.random_state)
@@ -142,6 +144,7 @@ class BenchmarkRunner:
                         k_folds=self.k_folds,
                         max_factor=self.max_factor,
                         random_state=self.random_state,
+                        use_mixed_precision=self.use_mixed_precision,
                     )
                 else:
                     pipeline = GeneralPipelineSklearn(
