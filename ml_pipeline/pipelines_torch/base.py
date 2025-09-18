@@ -5,6 +5,7 @@ import numpy as np
 import random
 from collections.abc import Sized
 from typing import cast
+from contextlib import nullcontext
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
@@ -398,6 +399,12 @@ class GeneralPipeline:
         max_factor: float = 2.0,  # Data augmentation factor (majority_count / final_minority_count)
         random_state: int = 42,  # Random seed for reproducibility
         use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
+        auto_scale_batch_size: bool = False,  # Probe for the largest batch size that fits in GPU memory
+        auto_batch_size_growth: int = 2,  # Multiplicative growth factor when probing batch size
+        max_auto_batch_size: Optional[int] = None,  # Upper bound for auto-scaled batch size
+        target_gpu_memory_utilization: float = 0.9,  # Target fraction of GPU memory to utilize
+        dataloader_num_workers: int = 0,  # Number of DataLoader workers
+        dataloader_pin_memory: Optional[bool] = None,  # Whether to pin memory for faster host-to-device copies
     ):
         # If dropout is provided and model supports it, set it
         if dropout is not None and hasattr(model, 'net'):
@@ -432,12 +439,24 @@ class GeneralPipeline:
         self.max_factor = max_factor
         self.random_state = random_state
         self.use_mixed_precision = use_mixed_precision
-        
-        # Initialize mixed precision training
+        self.auto_scale_batch_size = auto_scale_batch_size
+        self.auto_batch_size_growth = max(1, auto_batch_size_growth)
+        self.max_auto_batch_size = max_auto_batch_size
+        self.target_gpu_memory_utilization = float(target_gpu_memory_utilization)
+        self.dataloader_num_workers = dataloader_num_workers
+        if dataloader_pin_memory is None:
+            device_str = device if isinstance(device, str) else str(device)
+            self.dataloader_pin_memory = device_str.lower().startswith("cuda")
+        else:
+            self.dataloader_pin_memory = dataloader_pin_memory
+
+        # Initialize mixed precision training using the newer torch.amp API
         if self.use_mixed_precision and device != "cpu":
-            from torch.cuda.amp import GradScaler, autocast
-            self.scaler = GradScaler()
-            self.autocast = autocast
+            from torch.amp import GradScaler as _GradScaler, autocast as _autocast
+            # Use explicit "cuda" device target to avoid FutureWarning
+            self.scaler = _GradScaler("cuda")
+            # store autocast target as a callable that will be invoked in the loop
+            self.autocast = lambda: _autocast("cuda")
         else:
             self.scaler = None
             self.autocast = None
@@ -458,6 +477,97 @@ class GeneralPipeline:
         torch.cuda.manual_seed_all(self.random_state)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+
+    def _auto_adjust_batch_size(self, X: np.ndarray, y: Optional[np.ndarray], loss_fn: Callable) -> None:
+        """Dynamically grow batch size to better utilize available GPU memory."""
+        if not self.auto_scale_batch_size or y is None:
+            return
+
+        if not torch.cuda.is_available():
+            print("Auto batch scaling skipped: CUDA device not available.")
+            return
+
+        device_obj = self.device if isinstance(self.device, torch.device) else torch.device(self.device)
+        if device_obj.type != "cuda":
+            print("Auto batch scaling skipped: training device is not CUDA.")
+            return
+
+        total_samples = X.shape[0]
+        if total_samples == 0:
+            return
+
+        max_candidate = min(total_samples, self.max_auto_batch_size or total_samples)
+        if max_candidate <= 0:
+            return
+
+        candidate = min(max(1, self.batch_size), max_candidate)
+        best_batch_size = candidate
+        growth = max(1, self.auto_batch_size_growth)
+
+        device_index = device_obj.index if device_obj.index is not None else torch.cuda.current_device()
+        target_util = max(0.1, min(float(self.target_gpu_memory_utilization), 0.99))
+
+        x_tensor = torch.as_tensor(X, dtype=torch.float32)
+        target_dtype = torch.float32 if self.task_type == "regression" else torch.long
+        y_tensor = torch.as_tensor(y, dtype=target_dtype)
+
+        context_manager = self.autocast if self.autocast is not None else nullcontext
+
+        while candidate <= max_candidate:
+            try:
+                inputs = x_tensor[:candidate].to(device_obj, non_blocking=True)
+                targets = y_tensor[:candidate].to(device_obj, non_blocking=True)
+
+                self.model.train()
+                self.optimizer.zero_grad(set_to_none=True)
+                self.model.zero_grad()
+
+                torch.cuda.empty_cache()
+                torch.cuda.reset_peak_memory_stats(device_index)
+
+                with context_manager():
+                    outputs = self.model(inputs)
+                    if self.task_type == "regression":
+                        outputs = outputs.squeeze()
+                    loss = loss_fn(outputs, targets)
+
+                loss.backward()
+                torch.cuda.synchronize(device_index)
+
+                peak_memory = torch.cuda.max_memory_allocated(device_index)
+                total_memory = torch.cuda.get_device_properties(device_index).total_memory
+                utilization = peak_memory / total_memory if total_memory else 0.0
+
+                if utilization <= target_util and candidate < max_candidate:
+                    best_batch_size = candidate
+                    next_candidate = candidate * growth if growth > 1 else candidate + 1
+                    if next_candidate <= max_candidate:
+                        candidate = next_candidate
+                        continue
+                    else:
+                        best_batch_size = max_candidate
+                        break
+                elif utilization <= target_util:
+                    best_batch_size = candidate
+                    break
+                else:
+                    best_batch_size = candidate
+                    break
+            except RuntimeError as err:
+                if "out of memory" in str(err).lower():
+                    torch.cuda.empty_cache()
+                    if candidate == self.batch_size and candidate > 1:
+                        best_batch_size = max(1, candidate // max(2, growth))
+                    break
+                else:
+                    raise
+            finally:
+                self.optimizer.zero_grad(set_to_none=True)
+                self.model.zero_grad()
+                torch.cuda.empty_cache()
+
+        self.batch_size = max(1, min(best_batch_size, max_candidate))
+        print(f"Auto-scaled batch size to {self.batch_size} (target GPU mem util {target_util:.2f})")
 
     def _compute_f1_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
         """Compute F1 score for classification tasks."""
@@ -848,15 +958,24 @@ class GeneralPipeline:
         # Create generator for reproducible shuffling
         generator = torch.Generator()
         generator.manual_seed(self.random_state)
-        
-        loader: DataLoader = DataLoader(
-            dataset, 
-            batch_size=self.batch_size, 
-            shuffle=train,
-            generator=generator if train else None,
-            num_workers=0 , # Ensure deterministic behavior
-            drop_last=True if train else False
-        )
+
+        pin_memory = self.dataloader_pin_memory
+        if pin_memory is None:
+            device_str = str(self.device)
+            pin_memory = device_str.lower().startswith("cuda")
+
+        loader_kwargs: Dict[str, Any] = {
+            "batch_size": self.batch_size,
+            "shuffle": train,
+            "generator": generator if train else None,
+            "num_workers": self.dataloader_num_workers,
+            "pin_memory": pin_memory,
+            "drop_last": True if train else False,
+        }
+        if self.dataloader_num_workers > 0 and train:
+            loader_kwargs["persistent_workers"] = True
+
+        loader: DataLoader = DataLoader(dataset, **loader_kwargs)
         assert isinstance(loader.dataset, Sized), "Dataset must be Sized for len() to work."
         return loader
 
@@ -912,6 +1031,9 @@ class GeneralPipeline:
         
         # Create loss function with class weights
         loss_fn = self._create_loss_function()
+
+        # Optionally auto-tune batch size to leverage GPU memory before building loaders
+        self._auto_adjust_batch_size(X_train, y_train, loss_fn)
         
         train_loader: DataLoader = self.prepare_data_internal(X_train, y_train, train=True)
         val_loader: Optional[DataLoader] = self.prepare_data_internal(X_val, y_val, train=False) if X_val is not None and y_val is not None else None
