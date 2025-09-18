@@ -10,10 +10,192 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
 import sys
 import os
-from utils.utils import select_best_epoch, calculate_combined_score_for_epoch
+from utils.utils import select_best_epoch, calculate_combined_score_for_epoch, save_model, load_model
 
 
-class GeneralPipelineSklearn:
+class Evaluate:
+    """
+    Base class for evaluation methods shared across different pipeline types.
+    """
+    
+    def __init__(self):
+        # These attributes should be set by inheriting classes
+        self.model = None
+        self.task_type = "classification"
+        self.metrics = []
+        self.batch_size = 32
+        self.random_state = 42
+    
+    def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
+        """Internal data preparation method - should be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement prepare_data_internal")
+    
+    def evaluate(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        """Evaluate model performance on given data."""
+        if X is None or y is None:
+            return {}
+        
+        # Check if this is a PyTorch model or sklearn model
+        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
+            # PyTorch model evaluation
+            return self._evaluate_torch(X, y)
+        else:
+            # sklearn model evaluation
+            return self._evaluate_sklearn(X, y)
+    
+    def _evaluate_torch(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        """Evaluate PyTorch model."""
+        loader: DataLoader = self.prepare_data_internal(X, y, train=False)
+        self.model.eval()
+        all_preds = []
+        all_targets = []
+        with torch.no_grad():
+            for batch in loader:
+                Xb, yb = batch
+                Xb, yb = Xb.to(self.device), yb.to(self.device)
+                outputs = self.model(Xb)
+                if self.task_type == "regression":
+                    outputs = outputs.squeeze()
+                else:
+                    outputs = torch.softmax(outputs, dim=1)
+                all_preds.append(outputs.cpu())
+                all_targets.append(yb.cpu())
+        preds = torch.cat(all_preds).numpy()
+        targets = torch.cat(all_targets).numpy()
+        results = {}
+        for metric in self.metrics:
+            metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
+            try:
+                results[metric_key] = metric(targets, preds)
+            except:
+                results[metric_key] = 0.0
+        return results
+    
+    def _evaluate_sklearn(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        """Evaluate sklearn model."""
+        if hasattr(self.model, 'predict'):
+            y_pred = self.model.predict(X)
+        else:
+            raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
+        results = {}
+        for metric in self.metrics:
+            metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
+            try:
+                results[metric_key] = metric(y, y_pred)
+            except:
+                results[metric_key] = 0.0
+        return results
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions on given data."""
+        # Check if this is a PyTorch model or sklearn model
+        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
+            # PyTorch model prediction
+            return self._predict_torch(X)
+        else:
+            # sklearn model prediction
+            return self._predict_sklearn(X)
+    
+    def _predict_torch(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions with PyTorch model."""
+        loader: DataLoader = self.prepare_data_internal(X, train=False)
+        self.model.eval()
+        all_preds = []
+        with torch.no_grad():
+            for batch in loader:
+                Xb = batch[0] if isinstance(batch, (list, tuple)) else batch
+                Xb = Xb.to(self.device)
+                outputs = self.model(Xb)
+                if self.task_type == "regression":
+                    outputs = outputs.squeeze()
+                all_preds.append(outputs.cpu())
+        return torch.cat(all_preds).numpy()
+    
+    def _predict_sklearn(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions with sklearn model."""
+        if hasattr(self.model, 'predict'):
+            return self.model.predict(X)
+        else:
+            raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Predict class probabilities (classification only)."""
+        if self.task_type != "classification":
+            raise ValueError("predict_proba is only available for classification tasks")
+        
+        # Check if this is a PyTorch model or sklearn model
+        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
+            # PyTorch model prediction
+            return self._predict_proba_torch(X)
+        else:
+            # sklearn model prediction
+            return self._predict_proba_sklearn(X)
+    
+    def _predict_proba_torch(self, X: np.ndarray) -> np.ndarray:
+        """Predict probabilities with PyTorch model."""
+        loader: DataLoader = self.prepare_data_internal(X, train=False)
+        self.model.eval()
+        all_probs = []
+        with torch.no_grad():
+            for batch in loader:
+                Xb = batch[0] if isinstance(batch, (list, tuple)) else batch
+                Xb = Xb.to(self.device)
+                outputs = self.model(Xb)
+                probs = torch.softmax(outputs, dim=1)
+                all_probs.append(probs.cpu())
+        return torch.cat(all_probs).numpy()
+    
+    def _predict_proba_sklearn(self, X: np.ndarray) -> np.ndarray:
+        """Predict probabilities with sklearn model."""
+        if hasattr(self.model, 'predict_proba'):
+            return self.model.predict_proba(X)
+        else:
+            raise ValueError('Model does not support predict_proba')
+
+
+class SimplePredictor(Evaluate):
+    """
+    Lightweight class for making predictions with trained models.
+    Minimal setup required - just provide the model and basic info.
+    """
+    
+    def __init__(self, model, task_type: str = "classification", device: str = "cpu", batch_size: int = 32):
+        super().__init__()
+        self.model = model
+        self.task_type = task_type
+        self.device = device
+        self.batch_size = batch_size
+        self.random_state = 42
+        self.metrics = []
+        
+        # Move PyTorch models to device
+        if hasattr(model, 'to'):
+            self.model = model.to(device)
+    
+    def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
+        """Prepare data for PyTorch models, return None for sklearn models."""
+        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
+            # PyTorch model - create DataLoader
+            X_tensor = torch.tensor(X, dtype=torch.float32)
+            if y is not None:
+                y_tensor = torch.tensor(y, dtype=torch.float32 if self.task_type == "regression" else torch.long)
+                dataset = TensorDataset(X_tensor, y_tensor)
+            else:
+                dataset = TensorDataset(X_tensor)
+            
+            return DataLoader(
+                dataset, 
+                batch_size=self.batch_size, 
+                shuffle=False,  # No need to shuffle for prediction
+                num_workers=0,
+                drop_last=False
+            )
+        else:
+            # sklearn model - return None (data passed directly)
+            return None
+
+
+class GeneralPipelineSklearn(Evaluate):
     """
     General pipeline for scikit-learn models supporting classification and regression.
     """
@@ -30,6 +212,7 @@ class GeneralPipelineSklearn:
         k_folds=5,  # Number of folds for k-fold CV
         **kwargs
     ):
+        super().__init__()
         self.model = model
         self.metrics = metrics or []
         self.task_type = task_type
@@ -42,6 +225,12 @@ class GeneralPipelineSklearn:
         self.history = []
         self.cv_results = {}  # Store cross-validation results
         self.class_weights = None
+
+    def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
+        """Sklearn models don't use DataLoaders, so this returns a dummy implementation."""
+        # For sklearn models, we don't need DataLoaders, but we implement this for compatibility
+        # The actual data handling is done directly in the evaluation methods
+        return None
 
     def _compute_f1_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
         """Compute F1 score for classification tasks."""
@@ -272,21 +461,6 @@ class GeneralPipelineSklearn:
             results[metric_key] = metric(y, y_pred)
         return results
 
-    def evaluate(self, X, y):
-        return self._evaluate(X, y)
-
-    def predict(self, X):
-        if hasattr(self.model, 'predict'):
-            return self.model.predict(X)
-        else:
-            raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
-
-    def predict_proba(self, X):
-        if hasattr(self.model, 'predict_proba'):
-            return self.model.predict_proba(X)
-        else:
-            raise ValueError('Model does not support predict_proba')
-
     def fit(self, X, y):
         """
         Train the scikit-learn model with optional k-fold cross-validation.
@@ -368,7 +542,7 @@ class GeneralPipelineSklearn:
         
         return self.cv_results['cv_scores']
         
-class GeneralPipeline:
+class GeneralPipeline(Evaluate):
     """
     General pipeline for PyTorch models supporting classification and regression.
     """
@@ -399,6 +573,7 @@ class GeneralPipeline:
         random_state: int = 42,  # Random seed for reproducibility
         use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
     ):
+        super().__init__()
         # If dropout is provided and model supports it, set it
         if dropout is not None and hasattr(model, 'net'):
             # For nn.Sequential models, set dropout for all Dropout layers
@@ -1065,59 +1240,6 @@ class GeneralPipeline:
         # Return full history (list of dicts)
         return self.history
 
-    def evaluate(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
-        loader: DataLoader = self.prepare_data_internal(X, y, train=False)
-        self.model.eval()
-        all_preds = []
-        all_targets = []
-        with torch.no_grad():
-            for batch in loader:
-                Xb, yb = batch
-                Xb, yb = Xb.to(self.device), yb.to(self.device)
-                outputs = self.model(Xb)
-                if self.task_type == "regression":
-                    outputs = outputs.squeeze()
-                else:
-                    outputs = torch.softmax(outputs, dim=1)
-                all_preds.append(outputs.cpu())
-                all_targets.append(yb.cpu())
-        preds = torch.cat(all_preds).numpy()
-        targets = torch.cat(all_targets).numpy()
-        results = {}
-        for metric in self.metrics:
-            results[metric.__name__] = metric(targets, preds)
-        return results
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        loader: DataLoader = self.prepare_data_internal(X, train=False)
-        self.model.eval()
-        all_preds = []
-        with torch.no_grad():
-            for batch in loader:
-                Xb = batch[0].to(self.device)
-                outputs = self.model(Xb)
-                if self.task_type == "regression":
-                    outputs = outputs.squeeze()
-                else:
-                    outputs = torch.softmax(outputs, dim=1)
-                    outputs = outputs.argmax(dim=1)
-                all_preds.append(outputs.cpu())
-        return torch.cat(all_preds).numpy()
-
-    def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        if self.task_type != "classification":
-            raise ValueError("predict_proba is only available for classification tasks.")
-        loader: DataLoader = self.prepare_data_internal(X, train=False)
-        self.model.eval()
-        all_probs = []
-        with torch.no_grad():
-            for batch in loader:
-                Xb = batch[0].to(self.device)
-                outputs = self.model(Xb)
-                probs = torch.softmax(outputs, dim=1)
-                all_probs.append(probs.cpu())
-        return torch.cat(all_probs).numpy()
-    
     def get_training_history(self) -> List[Dict[str, float]]:
         """
         Get training history in format compatible with save_metrics function.
@@ -1145,49 +1267,6 @@ class GeneralPipeline:
         
         return self.cv_results['cv_scores']
 
-    def save_model(self, path: Optional[str] = None) -> None:
-        """Save model weights to a file."""
-        save_path = path or self.save_path
-        if save_path is None:
-            raise ValueError("No save path provided. Set save_path in __init__ or pass path parameter.")
-        
-        # If save_path is a directory, create a default filename
-        if os.path.isdir(save_path) or not save_path.endswith('.pt'):
-            model_name = getattr(self.model, '__class__', type(self.model)).__name__
-            filename = f"{model_name}_model.pt"
-            save_path = os.path.join(save_path, filename)
-        
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        
-        # Save model state dict
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
-            'class_weights': self.class_weights,
-            'task_type': self.task_type,
-            'history': self.history,
-            'epochs': self.epochs,
-            'batch_size': self.batch_size,
-            'device': self.device,
-        }, save_path)
-        print(f"Model saved to: {save_path}")
-
-    def load_model(self, path: str) -> None:
-        """Load model weights from a file."""
-        checkpoint = torch.load(path, map_location=self.device)
-        
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        
-        if checkpoint['scheduler_state_dict'] and self.scheduler:
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        
-        self.class_weights = checkpoint.get('class_weights')
-        self.history = checkpoint.get('history', {"train_loss": [], "val_loss": [], "metrics": []})
-        
-        print(f"Model loaded from: {path}")
 
     def save_to_huggingface(self, repo_name: Optional[str] = None, token: Optional[str] = None) -> None:
         """Save model to HuggingFace Hub."""
@@ -1249,8 +1328,6 @@ class GeneralPipeline:
 
     def save_model_after_training(self) -> None:
         """Save model after training is complete."""
-        if self.save_path:
-            self.save_model()
         
         if self.save_to_hf:
             self.save_to_huggingface()

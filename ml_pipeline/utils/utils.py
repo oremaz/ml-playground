@@ -27,8 +27,14 @@ def load_model(model_class, model_name, params, path_start=None):
     else:
         path = os.path.join(RESULTS_DIR, f"{model_name}.pt")
     model = model_class(**params)
+    
     if hasattr(model, "load_state_dict"):
-        model.load_state_dict(torch.load(path))
+        # Only use map_location if CUDA is not available
+        if torch.cuda.is_available():
+            state_dict = torch.load(path)
+        else:
+            state_dict = torch.load(path, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict)
     elif hasattr(model, "model"):
         model.model = joblib.load(path)
     elif hasattr(model, "from_pretrained"):
