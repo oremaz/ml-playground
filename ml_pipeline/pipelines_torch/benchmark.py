@@ -44,12 +44,6 @@ class BenchmarkRunner:
         max_factor: float = 2.0,  # Data augmentation factor (majority_count / final_minority_count)
         random_state: int = 42,  # Random seed for reproducibility
         use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
-        auto_scale_batch_size: bool = False,  # Probe for the largest batch size that fits in GPU memory
-        auto_batch_size_growth: int = 2,  # Multiplicative growth for batch size probing
-        max_auto_batch_size: Optional[int] = None,  # Upper bound for auto batch scaling
-        target_gpu_memory_utilization: float = 0.9,  # Target GPU memory utilization when probing
-        dataloader_num_workers: int = 0,  # Number of DataLoader workers
-        dataloader_pin_memory: Optional[bool] = None,  # Whether to pin memory for host-to-device transfers
     ):
         self.model_configs = model_configs
         self.augmentations = augmentations
@@ -72,12 +66,6 @@ class BenchmarkRunner:
         self.max_factor = max_factor
         self.random_state = random_state
         self.use_mixed_precision = use_mixed_precision
-        self.auto_scale_batch_size = auto_scale_batch_size
-        self.auto_batch_size_growth = auto_batch_size_growth
-        self.max_auto_batch_size = max_auto_batch_size
-        self.target_gpu_memory_utilization = target_gpu_memory_utilization
-        self.dataloader_num_workers = dataloader_num_workers
-        self.dataloader_pin_memory = dataloader_pin_memory
         
         # Set all random seeds for reproducibility
         set_all_seeds(self.random_state)
@@ -157,12 +145,6 @@ class BenchmarkRunner:
                         max_factor=self.max_factor,
                         random_state=self.random_state,
                         use_mixed_precision=self.use_mixed_precision,
-                        auto_scale_batch_size=self.auto_scale_batch_size,
-                        auto_batch_size_growth=self.auto_batch_size_growth,
-                        max_auto_batch_size=self.max_auto_batch_size,
-                        target_gpu_memory_utilization=self.target_gpu_memory_utilization,
-                        dataloader_num_workers=self.dataloader_num_workers,
-                        dataloader_pin_memory=self.dataloader_pin_memory,
                     )
                 else:
                     pipeline = GeneralPipelineSklearn(
