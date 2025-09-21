@@ -13,7 +13,7 @@ Comprehensive machine learning experimentation and benchmarking suite for food-r
 - **Reproducibility**: Deterministic splits, seed control, and experiment tracking
 
 ### 🔄 Advanced Data Augmentation
-- **Tabular augmentation**: SMOTE (all variants), Mixup, Simplicial SMOTE, MEB-SMOTE, official MGS-GRF & TabEBM wrappers, hybrid samplers, and cleaning (see `data_augmentation/augmentations.py`)
+- **Tabular augmentation**: SMOTE (all variants), Mixup, official MGS-GRF & TabEBM wrappers, hybrid samplers, and cleaning (see `data_augmentation/augmentations.py`)
 - **Text augmentation**: LLM-based (OpenAI, Gemini, HuggingFace) and classical (synonym, backtranslation, EDA) methods (`text_aug.py`)
 - **Image augmentation**: Classical (flip, rotate, noise) and Albumentations-based pipelines (`image_aug.py`)
 - **Registry pattern**: Easily add new augmentation methods; configure via registry and YAML/dict

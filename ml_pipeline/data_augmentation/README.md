@@ -4,7 +4,7 @@ This folder contains augmentation modules for text, image, and tabular/numerical
 
 - **`text_aug.py`**: Text augmentation using LLM prompting (Google Gemini) and classical techniques (synonym replacement, random insertion, deletion, swap).
 - **`image_aug.py`**: Image augmentation using classical computer vision (OpenCV, PIL) and Albumentations library.
-- **`augmentations.py`**: Tabular/numerical data augmentation using SMOTE variants, Mixup, Simplicial & MEB-SMOTE, official MGS-GRF/TabEBM wrappers, and hybrid samplers.
+- **`augmentations.py`**: Tabular/numerical data augmentation using SMOTE variants, Mixup, official MGS-GRF/TabEBM wrappers, and hybrid samplers.
 
 ## Features
 
@@ -47,7 +47,6 @@ This folder contains augmentation modules for text, image, and tabular/numerical
 ### Tabular/Numerical Data Augmentation (`augmentations.py`)
 - SMOTE, BorderlineSMOTE, SVMSMOTE, KMeansSMOTE, ADASYN
 - Mixup, MixupSMOTE
-- Simplicial SMOTE (2025) and MEB-SMOTE (2024) custom implementations
 - Official research wrappers for MGS-GRF (Artefactory) and TabEBM (NeurIPS 2024)
 - SMOTEENN, SMOTETomek
 - All oversampling methods (except mixup/none) apply TomekLinks cleaning
@@ -57,10 +56,6 @@ This folder contains augmentation modules for text, image, and tabular/numerical
 #### Official Research Wrappers
 - **MGS_GRF_Augmentor**: Calls the Artefactory `mgs-grf` implementation for mixed-type oversampling (requires cloning the repo or installing from source).
 - **TabEBMGenerator**: Wraps the official TabEBM energy-based sampler to learn class-conditional densities before drawing synthetic samples.
-
-#### Recent Research-Inspired Additions
-- **SimplicialSMOTE**: Samples points inside simplices spanned by minority neighbours to better cover complex manifolds.
-- **MEBSMOTE**: Generates synthetic samples inside minimum enclosing balls around minority clusters for safer oversampling.
 
 #### SMOTE Variants
 - **SMOTE**: Synthetic Minority Over-sampling Technique (`smote`)

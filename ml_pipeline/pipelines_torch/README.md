@@ -19,11 +19,10 @@ This module provides a unified, extensible framework for training, evaluating, a
 
 ### 🧪 Semi-Supervised Learning Utilities
 - **Vision SSL** (`ss_vision_models.py`): Implements Pseudo-Label, Pi-Model, Mean Teacher, and CDMAD debiasing while keeping hooks compatible with official repositories.
-- **Tabular SSL** (`ss_models.py`): General-purpose pseudo-labeling + EMA framework that can wrap any registry model and plug in tabular augmentations.
+- **Tabular SSL** (`ss_models.py`): Wraps any registry model with the same reusable SSL algorithms (pseudo-labeling or Mean Teacher) plus optional tabular-specific augmentations.
 
 ### 🧬 Advanced Augmentations (`augmentations.py`)
 - **Official research integrations**: Wrappers for MGS-GRF (Artefactory, 2025) and TabEBM (NeurIPS 2024) sourced directly from their repositories.
-- **Recent SMOTE variants**: Custom implementations of Simplicial SMOTE (2025) and MEB-SMOTE (2024) for handling mixed continuous/categorical data.
 
 ### 🔄 Cross-Validation & Ensembling
 - **K-fold CV**: Built-in support for k-fold cross-validation with optional weight averaging.
@@ -47,6 +46,7 @@ pipelines_torch/
 ├── vision_models.py    # Vision model registry (CNNs, CLIP, FatFormer, DiffusionFake, etc.)
 ├── ss_models.py        # Tabular semi-supervised wrappers
 ├── ss_vision_models.py # Vision semi-supervised algorithms & hooks
+├── ssl_algorithms.py   # Shared implementations of pseudo-label, Pi-Model, and Mean Teacher
 ├── augmentations.py    # Tabular augmentation strategies (MGS-GRF, TabEBM, SMOTE variants)
 └── ...
 ```
@@ -85,12 +85,12 @@ Use `get_model("model_name", ...)` to instantiate any vision model; tabular/text
 
 ### Vision (`ss_vision_models.py`)
 Provides loss wrappers that can sit on top of any vision backbone:
-- `PseudoLabel`, `PiModel`, `MeanTeacher`: Classical SSL baselines implemented from scratch in PyTorch.
+- `PseudoLabel`, `PiModel`, `MeanTeacher`: Classical SSL baselines implemented once in `ssl_algorithms.py` and reused across vision and tabular pipelines.
 - `CDMADHook`: Debias pseudo-labels using the official CDMAD repository or a faithful fallback implementation.
 - Hooks return `(supervised_loss, unsupervised_loss, logs)` so you can integrate them into existing training loops.
 
 ### Tabular (`ss_models.py`)
-- `SemiSupervisedTabular`: Wraps any registry model, performs pseudo-labeling with optional EMA teacher updates, and exposes augmentation hooks.
+- `SemiSupervisedTabular`: Wraps any registry model, reusing the shared pseudo-label or Mean Teacher implementations with optional Gaussian-noise augmentation hooks.
 - Designed to operate with the augmentation utilities in `augmentations.py` for minority-class oversampling or consistency regularization.
 
 ---
@@ -98,7 +98,6 @@ Provides loss wrappers that can sit on top of any vision backbone:
 ## Tabular Augmentations (`augmentations.py`)
 - `MGS_GRF_Augmentor`: Calls the official mixed-type oversampling implementation (requires cloning `artefactory/mgs-grf` or setting `MGS_GRF_REPO`).
 - `TabEBMGenerator`: Interfaces with the official TabEBM energy-based sampler (set `TABEBM_REPO` if the repo lives elsewhere).
-- `SimplicialSMOTE`, `MEBSMOTE`: Recent SMOTE variants implemented in-house for datasets where official code is unavailable.
 
 Each class operates on NumPy arrays and can be injected into pipelines or SSL routines as needed.
 
