@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Dict, Type, Optional, Sequence
+from typing import Dict, Type, Optional, Sequence, Callable
 
 from third_party import load_class
 
@@ -342,6 +342,60 @@ class DiffusionFakeOfficial(ThirdPartyModelWrapper):
         )
 
 
+class TimmVisionModel(nn.Module):
+    """Thin wrapper around timm backbones for registry-friendly initialization."""
+
+    def __init__(
+        self,
+        *,
+        model_name: str,
+        num_classes: int = 2,
+        pretrained: bool = True,
+        in_chans: int = 3,
+        global_pool: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        try:
+            import timm
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise ImportError(
+                "timm is required for the requested vision backbone. "
+                "Install it with `pip install timm`."
+            ) from exc
+
+        timm_kwargs = dict(kwargs)
+        timm_kwargs.setdefault("num_classes", num_classes)
+        timm_kwargs.setdefault("pretrained", pretrained)
+        timm_kwargs.setdefault("in_chans", in_chans)
+        if global_pool is not None:
+            timm_kwargs.setdefault("global_pool", global_pool)
+        self.model = timm.create_model(model_name, **timm_kwargs)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+def _register_timm_model(
+    backbone: str,
+    *,
+    registry_name: str,
+    default_kwargs: Optional[Dict[str, object]] = None,
+) -> Callable[..., nn.Module]:
+    """Create a callable that instantiates :class:`TimmVisionModel`."""
+
+    defaults = dict(default_kwargs or {})
+
+    class _TimmWrapper(TimmVisionModel):
+        def __init__(self, num_classes: int = 2, **kwargs) -> None:
+            params = dict(defaults)
+            params.update(kwargs)
+            super().__init__(model_name=backbone, num_classes=num_classes, **params)
+
+    _TimmWrapper.__name__ = f"Timm_{registry_name.title().replace('-', '_')}"
+    return _TimmWrapper
+
+
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "simple_cnn": SimpleCNN,
     "adaptive_cnn": AdaptiveCNN,
@@ -351,6 +405,27 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "qwen2_vl_qlora": Qwen2VLQLoRA,
     "fatformer_official": FatFormerOfficial,
     "diffusionfake_official": DiffusionFakeOfficial,
+    # Modern timm-based backbones for vision benchmarks
+    "timm_convnextv2_tiny": _register_timm_model(
+        "convnextv2_tiny.fcmae_ft_in1k", registry_name="convnextv2_tiny"
+    ),
+    "timm_efficientnetv2_s": _register_timm_model(
+        "efficientnetv2_s.in1k", registry_name="efficientnetv2_s"
+    ),
+    "timm_vit_base_patch16": _register_timm_model(
+        "vit_base_patch16_224.augreg2_in21k_ft_in1k",
+        registry_name="vit_base_patch16",
+    ),
+    "timm_vit_mae_base": _register_timm_model(
+        "vit_base_patch16_224.mae", registry_name="vit_mae_base"
+    ),
+    "timm_swinv2_small": _register_timm_model(
+        "swinv2_small_window8_256.ms_in1k", registry_name="swinv2_small"
+    ),
+    "timm_naflexvit_base": _register_timm_model(
+        "naflexvit_base_patch16_gap.e300_s576_in1k",
+        registry_name="naflexvit_base",
+    ),
 }
 
 
