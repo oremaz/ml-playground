@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
-from typing import Dict, Callable, Any, Optional
+from typing import Dict, Callable, Any, Optional, Sequence
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import xgboost as xgb
 import lightgbm as lgb
 from sklearn.multioutput import MultiOutputRegressor
+
+from third_party import load_class
 
 # --- MLPs ---
 class TorchMLP(nn.Module):
@@ -675,23 +677,139 @@ class HuggingFaceQLoRAWrapper:
         """Returns raw logits."""
         import torch
         self.model.eval()
-        
+
         with torch.no_grad():
             if isinstance(X, list):
                 # Handle batch
                 all_logits = []
                 for text in X:
-                    inputs = self.tokenizer(text, return_tensors='pt', truncation=True, 
+                    inputs = self.tokenizer(text, return_tensors='pt', truncation=True,
                                           padding='max_length', max_length=256).to(self.device)
                     outputs = self.model(**inputs)
                     all_logits.append(outputs.logits)
                 return torch.cat(all_logits, dim=0)
             else:
                 # Single input
-                inputs = self.tokenizer(X, return_tensors='pt', truncation=True, 
+                inputs = self.tokenizer(X, return_tensors='pt', truncation=True,
                                       padding='max_length', max_length=256).to(self.device)
                 outputs = self.model(**inputs)
                 return outputs.logits
+
+
+class ThirdPartyTabularModel(nn.Module):
+    """Generic nn.Module wrapper for third-party tabular research models."""
+
+    def __init__(
+        self,
+        repo_name: str,
+        class_name: str,
+        *,
+        repo_path: Optional[str] = None,
+        env_var: Optional[str] = None,
+        module_candidates: Optional[Sequence[str]] = None,
+        init_args: Optional[Sequence] = None,
+        init_kwargs: Optional[dict] = None,
+    ) -> None:
+        super().__init__()
+        init_args = tuple(init_args or ())
+        init_kwargs = dict(init_kwargs or {})
+        cls = load_class(
+            repo_name,
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+        )
+        self.inner = cls(*init_args, **init_kwargs)
+
+    def forward(self, *args, **kwargs):  # type: ignore[override]
+        return self.inner(*args, **kwargs)
+
+
+class TabRWrapper(ThirdPartyTabularModel):
+    def __init__(
+        self,
+        input_dim: int,
+        num_classes: int,
+        *,
+        repo_path: Optional[str] = None,
+        env_var: str = "TABR_REPO",
+        class_name: str = "TabR",
+        module_candidates: Optional[Sequence[str]] = (
+            "tabr.model",
+            "tabular_dl_tabr.model",
+            "tabr",
+        ),
+        model_kwargs: Optional[dict] = None,
+    ) -> None:
+        kwargs = dict(model_kwargs or {})
+        kwargs.setdefault("input_dim", input_dim)
+        kwargs.setdefault("num_classes", num_classes)
+        super().__init__(
+            "tabular-dl-tabr",
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+            init_kwargs=kwargs,
+        )
+
+
+class GrandeWrapper(ThirdPartyTabularModel):
+    def __init__(
+        self,
+        input_dim: int,
+        num_classes: int,
+        *,
+        repo_path: Optional[str] = None,
+        env_var: str = "GRANDE_REPO",
+        class_name: str = "GRANDE",
+        module_candidates: Optional[Sequence[str]] = (
+            "grande.model",
+            "grande",
+        ),
+        model_kwargs: Optional[dict] = None,
+    ) -> None:
+        kwargs = dict(model_kwargs or {})
+        kwargs.setdefault("input_dim", input_dim)
+        kwargs.setdefault("num_classes", num_classes)
+        super().__init__(
+            "grande",
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+            init_kwargs=kwargs,
+        )
+
+
+class TabMWrapper(ThirdPartyTabularModel):
+    def __init__(
+        self,
+        input_dim: int,
+        num_classes: int,
+        *,
+        repo_path: Optional[str] = None,
+        env_var: str = "TABM_REPO",
+        class_name: str = "TabM",
+        module_candidates: Optional[Sequence[str]] = (
+            "tabm.model",
+            "tabm",
+        ),
+        model_kwargs: Optional[dict] = None,
+    ) -> None:
+        kwargs = dict(model_kwargs or {})
+        kwargs.setdefault("input_dim", input_dim)
+        kwargs.setdefault("num_classes", num_classes)
+        super().__init__(
+            "tabm",
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+            init_kwargs=kwargs,
+        )
+
 
 # --- Registry ---
 CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
@@ -703,6 +821,9 @@ CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
     "hf_lora_classifier": lambda **kwargs: HuggingFaceLoRAWrapper(task_type='classification', **kwargs),
     "hf_qlora_classifier": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
     "llama_cpp_classifier": lambda **kwargs: LlamaCppClassifier(task_type='classification', **kwargs),
+    "tabr_classifier": TabRWrapper,
+    "grande_classifier": GrandeWrapper,
+    "tabm_classifier": TabMWrapper,
 }
 
 REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {

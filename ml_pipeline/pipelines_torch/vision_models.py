@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
-from typing import Dict, Type
+from typing import Dict, Type, Optional, Sequence
+
+from third_party import load_class
 
 
 class SimpleCNN(nn.Module):
@@ -251,6 +253,95 @@ class Qwen2VLQLoRA(nn.Module):
         return output.logits[:, -1, : self.num_classes]
 
 
+class ThirdPartyModelWrapper(nn.Module):
+    """Generic wrapper that instantiates a model from a locally cloned research repository."""
+
+    def __init__(
+        self,
+        repo_name: str,
+        class_name: str,
+        *,
+        repo_path: Optional[str] = None,
+        env_var: Optional[str] = None,
+        module_candidates: Optional[Sequence[str]] = None,
+        init_args: Optional[Sequence] = None,
+        init_kwargs: Optional[dict] = None,
+    ) -> None:
+        super().__init__()
+        init_args = tuple(init_args or ())
+        init_kwargs = dict(init_kwargs or {})
+        self._cls = load_class(
+            repo_name,
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+        )
+        self.inner = self._cls(*init_args, **init_kwargs)
+
+    def forward(self, *args, **kwargs):  # type: ignore[override]
+        return self.inner(*args, **kwargs)
+
+
+class FatFormerOfficial(ThirdPartyModelWrapper):
+    """Wrapper around the official FatFormer implementation (CVPR 2024)."""
+
+    def __init__(
+        self,
+        num_classes: int = 2,
+        *,
+        repo_path: Optional[str] = None,
+        class_name: str = "FatFormer",
+        module_candidates: Optional[Sequence[str]] = (
+            "models.fatformer",
+            "fatformer",
+            "FatFormer.models.fatformer",
+        ),
+        model_kwargs: Optional[dict] = None,
+        env_var: str = "FATFORMER_REPO",
+    ) -> None:
+        kwargs = dict(model_kwargs or {})
+        if num_classes is not None and "num_classes" not in kwargs:
+            kwargs["num_classes"] = num_classes
+        super().__init__(
+            "FatFormer",
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+            init_kwargs=kwargs,
+        )
+
+
+class DiffusionFakeOfficial(ThirdPartyModelWrapper):
+    """Wrapper for the official DiffusionFake detector (NeurIPS 2024)."""
+
+    def __init__(
+        self,
+        num_classes: int = 2,
+        *,
+        repo_path: Optional[str] = None,
+        class_name: str = "DiffusionDetector",
+        module_candidates: Optional[Sequence[str]] = (
+            "models.detector",
+            "diffusionfake.models.detector",
+        ),
+        model_kwargs: Optional[dict] = None,
+        env_var: str = "DIFFUSIONFAKE_REPO",
+    ) -> None:
+        kwargs = dict(model_kwargs or {})
+        if num_classes is not None and "num_classes" not in kwargs:
+            kwargs["num_classes"] = num_classes
+        super().__init__(
+            "DiffusionFake",
+            class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
+            init_kwargs=kwargs,
+        )
+
+
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "simple_cnn": SimpleCNN,
     "adaptive_cnn": AdaptiveCNN,
@@ -258,6 +349,8 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "resnet50": ResNet50,
     "clip_classifier": CLIPClassifier,
     "qwen2_vl_qlora": Qwen2VLQLoRA,
+    "fatformer_official": FatFormerOfficial,
+    "diffusionfake_official": DiffusionFakeOfficial,
 }
 
 
