@@ -1,7 +1,7 @@
 
 # Food Prediction & Benchmarking Suite (`ml_pipeline`)
 
-Comprehensive machine learning experimentation and benchmarking suite for food-related prediction tasks, including recipe difficulty, meal type, nutrient regression, and cooking time estimation. This directory provides modular pipelines, advanced data augmentation, model registries, and reproducible workflows for robust ML experimentation.
+Comprehensive machine learning experimentation and benchmarking suite for food-related prediction tasks, including recipe difficulty, meal type, nutrient regression, and cooking time estimation. This directory provides modular pipelines, advanced data augmentation, model registries, and reproducible workflows for robust ML experimentation. It now also documents how to plug in the official 2024–2025 research repositories that live under `third_party/` for vision and tabular experiments.
 
 ---
 
@@ -13,7 +13,7 @@ Comprehensive machine learning experimentation and benchmarking suite for food-r
 - **Reproducibility**: Deterministic splits, seed control, and experiment tracking
 
 ### 🔄 Advanced Data Augmentation
-- **Tabular augmentation**: SMOTE (all variants), Mixup, hybrid samplers, and cleaning (see `data_augmentation/augmentations.py`)
+- **Tabular augmentation**: SMOTE (all variants), Mixup, Simplicial SMOTE, MEB-SMOTE, official MGS-GRF & TabEBM wrappers, hybrid samplers, and cleaning (see `data_augmentation/augmentations.py`)
 - **Text augmentation**: LLM-based (OpenAI, Gemini, HuggingFace) and classical (synonym, backtranslation, EDA) methods (`text_aug.py`)
 - **Image augmentation**: Classical (flip, rotate, noise) and Albumentations-based pipelines (`image_aug.py`)
 - **Registry pattern**: Easily add new augmentation methods; configure via registry and YAML/dict
@@ -26,6 +26,11 @@ Comprehensive machine learning experimentation and benchmarking suite for food-r
 - **Flexible metrics**: Custom and standard metrics for classification/regression
 - **Consistent epoch selection**: Centralized logic in `utils/utils.py` ensures perfect consistency between training weight selection and result reporting
 - **Smart early stopping**: Combined score (50/50 weighted validation loss + primary metric) for robust convergence
+
+### 🔌 Third-Party Research Integrations
+- **Vision**: Wrapper utilities to run official FatFormer (CVPR 2024) and DiffusionFake (NeurIPS 2024) repositories via `pipelines_torch/vision_models.py`
+- **Tabular**: Registry adapters for TabR, GRANDE, and TabM directly import their official implementations when available under `third_party/`
+- **Augmentations**: Lightweight loaders for Artefactory's MGS-GRF and the TabEBM sampler to keep oversampling reproducible and in sync with upstream code
 
 ### 📊 Utilities & Visualization
 - **Data loading/splitting**: Robust, stratified, and reproducible splits (`utils/data.py`)
