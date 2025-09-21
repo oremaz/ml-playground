@@ -57,6 +57,7 @@ This folder contains augmentation modules for text, image, and tabular/numerical
 - **MGS_GRF_Augmentor**: Calls the Artefactory `mgs-grf` implementation for mixed-type oversampling (requires cloning the repo or installing from source).
 - **TabEBMGenerator**: Wraps the official TabEBM energy-based sampler to learn class-conditional densities before drawing synthetic samples.
 
+
 #### SMOTE Variants
 - **SMOTE**: Synthetic Minority Over-sampling Technique (`smote`)
 - **BorderlineSMOTE**: SMOTE with borderline focus (`borderline_smote`)
