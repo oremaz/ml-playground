@@ -21,11 +21,13 @@ def save_model(model, model_name, path_start=None):
         model.save_pretrained(os.path.join(base_dir, model_name))
     # Add more logic for LLMs if needed
 
-def load_model(model_class, model_name, params, path_start=None):
+def load_model(model_class, model_name, params, path_start=None, augmentation=None):
+    augmentation = augmentation or 'none'
+    model_file = f"{model_name}_{augmentation}.pt"
     if path_start is not None:
-        path = os.path.join(RESULTS_DIR, path_start, f"{model_name}.pt")
+        path = os.path.join(RESULTS_DIR, path_start, model_file)
     else:
-        path = os.path.join(RESULTS_DIR, f"{model_name}.pt")
+        path = os.path.join(RESULTS_DIR, model_file)
     model = model_class(**params)
     
     if hasattr(model, "load_state_dict"):
