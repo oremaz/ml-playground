@@ -368,7 +368,7 @@ class TimmVisionModel(nn.Module):
         timm_kwargs.setdefault("num_classes", num_classes)
         timm_kwargs.setdefault("pretrained", pretrained)
         timm_kwargs.setdefault("in_chans", in_chans)
-        timm_kwargs.setdefault("image_size", 32) # Default to 32x32 input for flexibility
+        timm_kwargs.setdefault("img_size", 32) # Default to 32x32 input for flexibility
         if global_pool is not None:
             timm_kwargs.setdefault("global_pool", global_pool)
         self.model = timm.create_model(model_name, **timm_kwargs)

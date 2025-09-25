@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import pandas as pd
 from tqdm import tqdm
 import random
@@ -28,7 +28,7 @@ class BenchmarkRunner:
         metrics: List[Any],
         task_type: str = "classification",
         device: str = "cpu",
-        epochs: int = 10,
+        epochs: Union[int, List[int], Dict[str, int]] = 10,
         batch_size: int = 32,
         early_stopping: Optional[int] = None,
         use_class_weights: bool = True,
@@ -50,7 +50,6 @@ class BenchmarkRunner:
         self.metrics = metrics
         self.task_type = task_type
         self.device = device
-        self.epochs = epochs
         self.batch_size = batch_size
         self.early_stopping = early_stopping
         self.use_class_weights = use_class_weights
@@ -67,6 +66,40 @@ class BenchmarkRunner:
         self.random_state = random_state
         self.use_mixed_precision = use_mixed_precision
         
+        # Normalize epoch configuration across models
+        self._epochs_scalar: Optional[int] = None
+        self._epochs_sequence: Optional[List[int]] = None
+        self._epochs_map: Optional[Dict[str, int]] = None
+
+        if isinstance(epochs, int):
+            self._epochs_scalar = epochs
+        elif isinstance(epochs, (list, tuple)):
+            if len(epochs) != len(model_configs):
+                raise ValueError(
+                    "When providing epochs as a list/tuple, its length must match model_configs."
+                )
+            self._epochs_sequence = list(epochs)
+        elif isinstance(epochs, dict):
+            model_names = {cfg["name"] for cfg in model_configs}
+            epoch_names = set(epochs.keys())
+            if model_names != epoch_names:
+                missing = model_names - epoch_names
+                extra = epoch_names - model_names
+                details = []
+                if missing:
+                    details.append(f"missing entries for: {sorted(missing)}")
+                if extra:
+                    details.append(f"unexpected entries: {sorted(extra)}")
+                message = "; ".join(details) if details else ""
+                raise ValueError(
+                    "Epochs dict keys must exactly match model names in model_configs." + (
+                        f" {message}" if message else ""
+                    )
+                )
+            self._epochs_map = dict(epochs)
+        else:
+            raise TypeError("epochs must be int, list/tuple of ints, or dict mapping model names to ints")
+
         # Set all random seeds for reproducibility
         set_all_seeds(self.random_state)
 
@@ -89,13 +122,15 @@ class BenchmarkRunner:
             import os
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path, exist_ok=True)
-        for model_cfg in tqdm(self.model_configs, desc="Models"):
+        for model_idx, model_cfg in enumerate(tqdm(self.model_configs, desc="Models")):
             model_name = model_cfg["name"]
             model_class = model_cfg["class"]
             model_params = model_cfg.get("params", {}).copy()
             # Add dropout to model params if specified
             if self.dropout is not None:
                 model_params["dropout"] = self.dropout
+
+            epochs = self._resolve_epochs(model_name, model_idx)
             for aug in tqdm(self.augmentations, desc="Augmentations", leave=False):
                 aug_name = aug.__name__ if aug is not None else "none"
                 print(f"\nRunning Model: {model_name} | Augmentation: {aug_name}")
@@ -131,7 +166,7 @@ class BenchmarkRunner:
                         metrics=self.metrics,
                         task_type=self.task_type,
                         device=self.device,
-                        epochs=self.epochs,
+                        epochs=epochs,
                         batch_size=self.batch_size,
                         early_stopping=self.early_stopping,
                         use_class_weights=self.use_class_weights,
@@ -181,6 +216,22 @@ class BenchmarkRunner:
                     self._process_single_fold_results(results, model_name, aug_name, training_history)
                     
         return pd.DataFrame(results)
+
+    def _resolve_epochs(self, model_name: str, model_idx: int) -> int:
+        """Return the epoch count for a given model based on the configured scheme."""
+        if self._epochs_scalar is not None:
+            epochs = self._epochs_scalar
+        elif self._epochs_sequence is not None:
+            epochs = self._epochs_sequence[model_idx]
+        elif self._epochs_map is not None:
+            epochs = self._epochs_map[model_name]
+        else:
+            raise RuntimeError("Epoch configuration is not initialized correctly.")
+
+        if not isinstance(epochs, int) or epochs <= 0:
+            raise ValueError(f"Epochs must be a positive int for model '{model_name}', got {epochs}.")
+
+        return epochs
 
     def _process_kfold_cv_results(self, results: List[Dict], model_name: str, aug_name: str, cv_results: Dict[str, Dict[str, float]]):
         """Process results from k-fold cross-validation using CV scores."""
