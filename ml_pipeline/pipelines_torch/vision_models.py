@@ -3,7 +3,8 @@ import torch.nn as nn
 from typing import Dict, Type, Optional, Sequence, Callable
 
 from third_party import load_class
-
+import inspect
+import timm
 
 class SimpleCNN(nn.Module):
     """A very small CNN for quick experiments on vision datasets."""
@@ -356,21 +357,24 @@ class TimmVisionModel(nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
-        try:
-            import timm
-        except ImportError as exc:  # pragma: no cover - optional dependency
-            raise ImportError(
-                "timm is required for the requested vision backbone. "
-                "Install it with `pip install timm`."
-            ) from exc
 
         timm_kwargs = dict(kwargs)
         timm_kwargs.setdefault("num_classes", num_classes)
         timm_kwargs.setdefault("pretrained", pretrained)
         timm_kwargs.setdefault("in_chans", in_chans)
-        timm_kwargs.setdefault("img_size", 32) # Default to 32x32 input for flexibility
+        _candidate_kwargs = {**timm_kwargs, "img_size": 32}
+        try:
+            inspect.signature(timm.create_model).bind(model_name, **_candidate_kwargs)
+            timm_kwargs.setdefault("img_size", 32)
+        except TypeError:
+            # img_size (or another kw) not accepted by this factory/signature; skip adding it
+            pass
         if global_pool is not None:
-            timm_kwargs.setdefault("global_pool", global_pool)
+            try:
+                inspect.signature(timm.create_model).bind(model_name, global_pool=global_pool)
+                timm_kwargs.setdefault("global_pool", global_pool)
+            except TypeError:
+                pass
         self.model = timm.create_model(model_name, **timm_kwargs)
 
     def forward(self, x):
