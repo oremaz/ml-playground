@@ -271,10 +271,11 @@ class BenchmarkRunner:
             raise RuntimeError(f"No training history found for model {model_name} with augmentation {aug_name}.")
         
         # Use centralized epoch selection logic
-        best_epoch = select_best_epoch(history, self.task_type)
+        selection_metric = 'roc_auc' if self.task_type == 'classification' else 'r2_score'
+        best_epoch = select_best_epoch(history, self.task_type, metric=selection_metric)
         best_metrics = history[best_epoch]
-        
-        # Add train_loss, val_loss, and f1_score as metrics
+
+        # Add core metrics from the selected epoch
         results.append({
             "model": model_name,
             "augmentation": aug_name,
@@ -303,6 +304,16 @@ class BenchmarkRunner:
             "score": best_metrics.get(primary_metric, None),
             "fold": "single"
         })
+
+        if self.task_type == 'classification':
+            for metric_name in ("roc_auc", "pr_auc"):
+                results.append({
+                    "model": model_name,
+                    "augmentation": aug_name,
+                    "metric": metric_name,
+                    "score": best_metrics.get(metric_name, None),
+                    "fold": "single"
+                })
         
         # Add all other metrics from best epoch
         for metric_name in self.metrics:

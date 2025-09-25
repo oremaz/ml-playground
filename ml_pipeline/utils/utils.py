@@ -52,76 +52,58 @@ def save_metrics(metrics, model_name, phase, path_start=None):
     df = pd.DataFrame(metrics)
     df.to_csv(os.path.join(base_dir, f"{model_name}_{phase}_metrics.csv"), index=False)
 
-def select_best_epoch(history, task_type='classification'):
+def select_best_epoch(history, task_type='classification', metric=None):
     """
-    Select best epoch using combined score of normalized validation loss and primary metric.
+    Select best epoch using only the referenced metric.
     This is the centralized logic used by both GeneralPipeline and BenchmarkRunner.
     
     Args:
         history: List of dictionaries containing epoch metrics
         task_type: 'classification' or 'regression'
+        metric: Optional metric name to prioritize (defaults to ROC-AUC for classification, R² for regression)
         
     Returns:
         int: Index of the best epoch
     """
     if not history:
         return 0
-    
-    # Get primary metric name based on task type
-    primary_metric = 'f1_score' if task_type == 'classification' else 'r2_score'
-    
-    # Gather per-epoch values for validation loss and primary metric
-    val_losses = [h.get('val_loss', None) for h in history]
-    primary_scores = [h.get(primary_metric, None) for h in history]
 
-    # Determine indices that have at least one recorded value
-    valid_indices = [i for i, (vl, ps) in enumerate(zip(val_losses, primary_scores)) if vl is not None or ps is not None]
-    if not valid_indices:
-        return 0  # Fallback to first epoch
+    # Determine metric name based on task type (allow override)
+    default_metric = 'roc_auc' if task_type == 'classification' else 'r2_score'
+    metric_name = metric or default_metric
 
-    # Build numpy arrays for normalization (preserve order relative to valid_indices)
-    vl_arr = np.array([val_losses[i] if val_losses[i] is not None else np.nan for i in valid_indices], dtype=float)
-    ps_arr = np.array([primary_scores[i] if primary_scores[i] is not None else np.nan for i in valid_indices], dtype=float)
+    metric_values = []
 
-    # Normalization helper: map values to [0,1]; handle constant arrays and all-nan arrays
-    def _normalize(arr: np.ndarray) -> np.ndarray:
-        if np.all(np.isnan(arr)):
-            return np.full_like(arr, 0.5, dtype=float)
-        mn = np.nanmin(arr)
-        mx = np.nanmax(arr)
-        if mx == mn:
-            # All values identical -> produce neutral score (0.0 so it doesn't bias loss)
-            return np.zeros_like(arr, dtype=float)
-        return (arr - mn) / (mx - mn)
+    for record in history:
+        value = record.get(metric_name)
+        if isinstance(value, (float, np.floating)) and np.isnan(value):
+            value = None
+        if value is not None:
+            metric_values.append(float(value))
+        else:
+            metric_values.append(None)
 
-    norm_loss = _normalize(vl_arr)
-    norm_metric = _normalize(ps_arr)
+    best_epoch = 0
+    best_value = float('-inf')
+    for idx, value in enumerate(metric_values):
+        if value is None:
+            continue
+        if value > best_value:
+            best_value = value
+            best_epoch = idx
 
-    # For missing entries (nan) use neutral value 0.5 so they don't dominate selection
-    norm_loss = np.where(np.isnan(vl_arr), 0.5, norm_loss)
-    norm_metric = np.where(np.isnan(ps_arr), 0.5, norm_metric)
-
-    # Lower is better for loss; higher is better for metric. Invert normalized metric so lower==better
-    inv_norm_metric = 1.0 - norm_metric
-
-    # Combined score: equal weight to normalized loss and inverted normalized metric
-    combined_score = 0.5 * norm_loss + 0.5 * inv_norm_metric
-
-    # Select epoch with minimal combined score. Map back to original epoch index
-    best_idx_in_valid = int(np.nanargmin(combined_score))
-    best_epoch = valid_indices[best_idx_in_valid]
-    
     return best_epoch
 
-def calculate_combined_score_for_epoch(history, target_epoch, task_type='classification'):
+def calculate_combined_score_for_epoch(history, target_epoch, task_type='classification', metric=None):
     """
-    Calculate combined score for a specific epoch using the same logic as select_best_epoch.
+    Calculate combined score for a specific epoch using only the referenced metric.
     Used for early stopping to ensure consistency.
     
     Args:
         history: List of dictionaries containing epoch metrics
         target_epoch: The epoch to calculate score for
         task_type: 'classification' or 'regression'
+        metric: Optional metric name to prioritize (defaults to ROC-AUC for classification, R² for regression)
         
     Returns:
         float: Combined score for the target epoch
@@ -129,47 +111,27 @@ def calculate_combined_score_for_epoch(history, target_epoch, task_type='classif
     if target_epoch >= len(history):
         return float('inf')
     
-    # Get primary metric name based on task type
-    primary_metric = 'f1_score' if task_type == 'classification' else 'r2_score'
-    
-    # Use history up to current epoch (for early stopping)
-    history_subset = history[:target_epoch + 1]
-    
-    # Gather per-epoch values for validation loss and primary metric
-    val_losses = [h.get('val_loss', None) for h in history_subset]
-    primary_scores = [h.get(primary_metric, None) for h in history_subset]
+    # Get metric name based on task type (allow override)
+    default_metric = 'roc_auc' if task_type == 'classification' else 'r2_score'
+    metric_name = metric or default_metric
 
-    # Determine indices that have at least one recorded value
-    valid_indices = [i for i, (vl, ps) in enumerate(zip(val_losses, primary_scores)) if vl is not None or ps is not None]
-    if not valid_indices or target_epoch not in valid_indices:
-        return float('inf')
-
-    # Build numpy arrays for normalization (preserve order relative to valid_indices)
-    vl_arr = np.array([val_losses[i] if val_losses[i] is not None else np.nan for i in valid_indices], dtype=float)
-    ps_arr = np.array([primary_scores[i] if primary_scores[i] is not None else np.nan for i in valid_indices], dtype=float)
-
-    # Same normalization logic as select_best_epoch
-    def _normalize(arr: np.ndarray) -> np.ndarray:
-        if np.all(np.isnan(arr)):
-            return np.full_like(arr, 0.5, dtype=float)
-        mn = np.nanmin(arr)
-        mx = np.nanmax(arr)
-        if mx == mn:
-            return np.zeros_like(arr, dtype=float)
-        return (arr - mn) / (mx - mn)
-
-    norm_loss = _normalize(vl_arr)
-    norm_metric = _normalize(ps_arr)
-
-    norm_loss = np.where(np.isnan(vl_arr), 0.5, norm_loss)
-    norm_metric = np.where(np.isnan(ps_arr), 0.5, norm_metric)
-
-    inv_norm_metric = 1.0 - norm_metric
-    combined_score = 0.5 * norm_loss + 0.5 * inv_norm_metric
-
-    # Find the target epoch in valid_indices and return its score
     try:
-        target_idx_in_valid = valid_indices.index(target_epoch)
-        return float(combined_score[target_idx_in_valid])
-    except ValueError:
+        value = history[target_epoch].get(metric_name)
+    except IndexError:
         return float('inf')
+
+    if isinstance(value, (float, np.floating)) and np.isnan(value):
+        value = None
+
+    if value is None:
+        legacy_metric = 'f1_score' if task_type == 'classification' else 'r2_score'
+        value = history[target_epoch].get(legacy_metric)
+
+    if isinstance(value, (float, np.floating)) and np.isnan(value):
+        value = None
+
+    if value is None:
+        return float('inf')
+
+    # Lower combined score should still indicate better performance, so negate the metric
+    return -float(value)

@@ -7,10 +7,9 @@ from collections.abc import Sized
 from typing import cast
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import KFold
-from sklearn.metrics import f1_score
-import sys
-import os
-from utils.utils import select_best_epoch, calculate_combined_score_for_epoch, save_model, load_model
+from sklearn.metrics import f1_score, roc_auc_score, average_precision_score
+from sklearn.preprocessing import label_binarize
+from utils.utils import select_best_epoch, calculate_combined_score_for_epoch
 
 
 class Evaluate:
@@ -25,6 +24,10 @@ class Evaluate:
         self.metrics = []
         self.batch_size = 32
         self.random_state = 42
+
+    def _default_selection_metric(self) -> str:
+        """Return default metric used to select best epoch based on task type."""
+        return "roc_auc" if self.task_type == "classification" else "r2_score"
     
     def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
         """Internal data preparation method - should be implemented by subclasses."""
@@ -236,24 +239,82 @@ class GeneralPipelineSklearn(Evaluate):
         """Compute F1 score for classification tasks."""
         if self.task_type != "classification":
             return 0.0
-        
+
         # Use macro average for multi-class, binary for binary classification
         average = 'binary' if len(np.unique(targets)) == 2 else 'macro'
-        
+
         try:
-            return f1_score(targets, preds, average=average, zero_division=0)
-        except:
+            targets_array = np.asarray(targets)
+            preds_array = np.asarray(preds)
+            if preds_array.ndim > 1:
+                preds_processed = np.argmax(preds_array, axis=1)
+            else:
+                if len(np.unique(targets_array)) == 2:
+                    preds_processed = (preds_array >= 0.5).astype(int)
+                else:
+                    preds_processed = preds_array
+            return f1_score(targets_array, preds_processed, average=average, zero_division=0)
+        except Exception:
             return 0.0
 
     def _compute_r2_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
         """Compute R² score for regression tasks."""
         if self.task_type != "regression":
             return 0.0
-        
+
         try:
             from sklearn.metrics import r2_score
             return r2_score(targets, preds)
-        except:
+        except Exception:
+            return 0.0
+
+    def _compute_roc_auc(self, targets: np.ndarray, preds: np.ndarray) -> float:
+        """Compute ROC-AUC score for classification using probability outputs."""
+        if self.task_type != "classification":
+            return 0.0
+
+        try:
+            y_true = np.asarray(targets)
+            y_scores = np.asarray(preds)
+
+            if y_scores.ndim == 1:
+                scores = y_scores
+            elif y_scores.shape[1] == 1:
+                scores = y_scores[:, 0]
+            elif y_scores.shape[1] == 2:
+                scores = y_scores[:, 1]
+            else:
+                return float(roc_auc_score(y_true, y_scores, multi_class='ovr', average='macro'))
+
+            return float(roc_auc_score(y_true, scores))
+        except Exception:
+            return 0.0
+
+    def _compute_pr_auc(self, targets: np.ndarray, preds: np.ndarray) -> float:
+        """Compute PR-AUC (average precision) for classification using probability outputs."""
+        if self.task_type != "classification":
+            return 0.0
+
+        try:
+            y_true = np.asarray(targets)
+            y_scores = np.asarray(preds)
+
+            if y_scores.ndim == 1:
+                scores = y_scores
+                return float(average_precision_score(y_true, scores))
+
+            if y_scores.shape[1] == 1:
+                scores = y_scores[:, 0]
+                return float(average_precision_score(y_true, scores))
+
+            if y_scores.shape[1] == 2:
+                scores = y_scores[:, 1]
+                return float(average_precision_score(y_true, scores))
+
+            classes = np.arange(y_scores.shape[1])
+            y_true_bin = label_binarize(y_true, classes=classes)
+            return float(average_precision_score(y_true_bin, y_scores, average='macro'))
+        except Exception:
             return 0.0
 
     def _kfold_fit(self, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
@@ -293,11 +354,24 @@ class GeneralPipelineSklearn(Evaluate):
 
             # Evaluate on validation set
             y_pred = fold_model.predict(X_fold_val)
-            
+
             # Compute metrics
             fold_metrics = {}
             if self.task_type == "classification":
                 fold_metrics['f1_score'] = self._compute_f1_score(y_fold_val, y_pred)
+
+                prob_preds = None
+                if hasattr(fold_model, 'predict_proba'):
+                    try:
+                        prob_preds = fold_model.predict_proba(X_fold_val)
+                    except Exception:
+                        prob_preds = None
+                if prob_preds is not None:
+                    fold_metrics['roc_auc'] = self._compute_roc_auc(y_fold_val, prob_preds)
+                    fold_metrics['pr_auc'] = self._compute_pr_auc(y_fold_val, prob_preds)
+                else:
+                    fold_metrics['roc_auc'] = None
+                    fold_metrics['pr_auc'] = None
             else:  # regression
                 fold_metrics['r2_score'] = self._compute_r2_score(y_fold_val, y_pred)
             
@@ -853,6 +927,8 @@ class GeneralPipeline(Evaluate):
         
         if self.task_type == "classification":
             metrics['f1_score'] = self._compute_f1_score(targets, preds)
+            metrics['roc_auc'] = self._compute_roc_auc(targets, preds)
+            metrics['pr_auc'] = self._compute_pr_auc(targets, preds)
         else:  # regression
             metrics['r2_score'] = self._compute_r2_score(targets, preds)
         
@@ -974,14 +1050,19 @@ class GeneralPipeline(Evaluate):
         Select best epoch using centralized logic from utils.utils.
         This ensures consistency across all components.
         """
-        return select_best_epoch(self.history, self.task_type)
+        return select_best_epoch(self.history, self.task_type, metric=self._default_selection_metric())
 
     def _calculate_combined_score_for_epoch(self, target_epoch: int) -> float:
         """
         Calculate combined score for a specific epoch using centralized logic from utils.utils.
         Used for early stopping to ensure consistency.
         """
-        return calculate_combined_score_for_epoch(self.history, target_epoch, self.task_type)
+        return calculate_combined_score_for_epoch(
+            self.history,
+            target_epoch,
+            self.task_type,
+            metric=self._default_selection_metric(),
+        )
 
     def _reset_model(self):
         """Reset model weights and optimizer for k-fold training."""
@@ -1128,9 +1209,11 @@ class GeneralPipeline(Evaluate):
             self.train_losses.append(train_loss)
             
             val_loss = None
-            metrics_dict = {}
-            current_f1 = 0.0
-            current_r2 = 0.0
+            extra_metrics: Dict[str, float] = {}
+            current_f1: Optional[float] = None
+            current_r2: Optional[float] = None
+            current_roc_auc: Optional[float] = None
+            current_pr_auc: Optional[float] = None
             
             if val_loader:
                 self.model.eval()
@@ -1158,17 +1241,22 @@ class GeneralPipeline(Evaluate):
                 preds = torch.cat(all_preds).numpy()
                 targets = torch.cat(all_targets).numpy()
                 
-                # Compute F1 score for classification tasks and R² for regression
+                # Compute metrics for validation set
                 if self.task_type == "classification":
                     current_f1 = self._compute_f1_score(targets, preds)
-                    current_r2 = 0.0  # Not needed for classification
+                    current_roc_auc = self._compute_roc_auc(targets, preds)
+                    current_pr_auc = self._compute_pr_auc(targets, preds)
+                    current_r2 = None  # Not needed for classification
                 else:  # regression
                     current_r2 = self._compute_r2_score(targets, preds)
-                    current_f1 = 0.0  # Not needed for regression
-                
+                    current_f1 = None  # Not needed for regression
+
                 for metric in self.metrics:
                     metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
-                    metrics_dict[metric_key] = metric(targets, preds)
+                    try:
+                        extra_metrics[metric_key] = metric(targets, preds)
+                    except Exception:
+                        extra_metrics[metric_key] = 0.0
                 
                 # Store raw scores in history - selection logic will be applied post-training
                 # This ensures consistency between training and BenchmarkRunner selection
@@ -1196,9 +1284,14 @@ class GeneralPipeline(Evaluate):
             progress_str = f"Epoch {epoch+1}/{self.epochs} - Train Loss: {train_loss:.4f}"
             if val_loss is not None:
                 progress_str += f", Val Loss: {val_loss:.4f}"
-            if self.task_type == "classification" and current_f1 > 0:
-                progress_str += f", F1: {current_f1:.4f}"
-            elif self.task_type == "regression" and current_r2 != 0:
+            if self.task_type == "classification":
+                if current_f1 is not None:
+                    progress_str += f", F1: {current_f1:.4f}"
+                if current_roc_auc is not None:
+                    progress_str += f", ROC-AUC: {current_roc_auc:.4f}"
+                if current_pr_auc is not None:
+                    progress_str += f", PR-AUC: {current_pr_auc:.4f}"
+            elif self.task_type == "regression" and current_r2 is not None:
                 progress_str += f", R²: {current_r2:.4f}"
             print(progress_str)
             
@@ -1209,9 +1302,11 @@ class GeneralPipeline(Evaluate):
             epoch_metrics = {"loss": train_loss, "val_loss": val_loss}
             if self.task_type == "classification":
                 epoch_metrics["f1_score"] = current_f1
+                epoch_metrics["roc_auc"] = current_roc_auc
+                epoch_metrics["pr_auc"] = current_pr_auc
             else:  # regression
                 epoch_metrics["r2_score"] = current_r2
-            epoch_metrics.update(metrics_dict)
+            epoch_metrics.update(extra_metrics)
             self.history.append(epoch_metrics)
             
             # Store weights from this epoch for potential selection later

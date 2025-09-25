@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Type, Optional, Sequence, Callable
-
 from third_party import load_class
 import timm
 
@@ -383,6 +382,8 @@ class TimmVisionModel(nn.Module):
                 if retried:
                     return timm.create_model(model_name, **kws)
                 raise
+            except RuntimeError as e:
+                raise
 
         self.model = _create_with_fallbacks(attempt_kwargs)
 
@@ -424,7 +425,7 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
         "convnextv2_tiny.fcmae_ft_in1k", registry_name="convnextv2_tiny"
     ),
     "timm_efficientnetv2_s": _register_timm_model(
-        "efficientnetv2_s.in1k", registry_name="efficientnetv2_s"
+        "tf_efficientnetv2_s.in21k", registry_name="tf_efficientnetv2_s"
     ),
     "timm_vit_base_patch16": _register_timm_model(
         "vit_base_patch16_224.augreg2_in21k_ft_in1k",
@@ -451,5 +452,5 @@ def get_model(name: str, num_classes: int = 2, **kwargs) -> nn.Module:
 
 if __name__ == "__main__":
     # Example usage and sanity check
-    model = get_model("timm_convnextv2_tiny", num_classes=10)
+    model = get_model("timm_naflexvit_base", num_classes=10)
     print(model)
