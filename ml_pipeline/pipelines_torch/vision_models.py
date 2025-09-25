@@ -3,7 +3,6 @@ import torch.nn as nn
 from typing import Dict, Type, Optional, Sequence, Callable
 
 from third_party import load_class
-import inspect
 import timm
 
 class SimpleCNN(nn.Module):
@@ -362,21 +361,30 @@ class TimmVisionModel(nn.Module):
         timm_kwargs.setdefault("num_classes", num_classes)
         timm_kwargs.setdefault("pretrained", pretrained)
         timm_kwargs.setdefault("in_chans", in_chans)
-        _candidate_kwargs = {**timm_kwargs, "img_size": 32}
-        try:
-            inspect.signature(timm.create_model).bind(model_name, **_candidate_kwargs)
-            timm_kwargs.setdefault("img_size", 32)
-        except TypeError:
-            # img_size (or another kw) not accepted by this factory/signature; skip adding it
-            pass
         if global_pool is not None:
-            _candidate_kwargs = {**timm_kwargs, "global_pool": global_pool}
+            timm_kwargs.setdefault("global_pool", global_pool)
+
+        attempt_kwargs = dict(timm_kwargs)
+        def _create_with_fallbacks(kws: dict):
             try:
-                inspect.signature(timm.create_model).bind(model_name, **_candidate_kwargs)
-                timm_kwargs.setdefault("global_pool", global_pool)
-            except TypeError:
-                pass
-        self.model = timm.create_model(model_name, **timm_kwargs)
+                return timm.create_model(model_name, **kws)
+            except TypeError as e:
+                msg = str(e)
+                # Drop unsupported kwargs one by one and retry
+                retried = False
+                if "unexpected keyword argument 'img_size'" in msg and 'img_size' in kws:
+                    kws = dict(kws)
+                    kws.pop('img_size', None)
+                    retried = True
+                if "unexpected keyword argument 'global_pool'" in msg and 'global_pool' in kws:
+                    kws = dict(kws)
+                    kws.pop('global_pool', None)
+                    retried = True
+                if retried:
+                    return timm.create_model(model_name, **kws)
+                raise
+
+        self.model = _create_with_fallbacks(attempt_kwargs)
 
     def forward(self, x):
         return self.model(x)
@@ -440,3 +448,8 @@ def get_model(name: str, num_classes: int = 2, **kwargs) -> nn.Module:
     if name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model '{name}'. Available: {list(MODEL_REGISTRY)}")
     return MODEL_REGISTRY[name](num_classes=num_classes, **kwargs)
+
+if __name__ == "__main__":
+    # Example usage and sanity check
+    model = get_model("timm_convnextv2_tiny", num_classes=10)
+    print(model)
