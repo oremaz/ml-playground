@@ -1,7 +1,7 @@
 """Semi-supervised vision algorithms with optional hooks to official research repositories."""
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
