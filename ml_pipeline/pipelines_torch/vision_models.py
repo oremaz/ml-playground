@@ -370,8 +370,9 @@ class TimmVisionModel(nn.Module):
             # img_size (or another kw) not accepted by this factory/signature; skip adding it
             pass
         if global_pool is not None:
+            _candidate_kwargs = {**timm_kwargs, "global_pool": global_pool}
             try:
-                inspect.signature(timm.create_model).bind(model_name, global_pool=global_pool)
+                inspect.signature(timm.create_model).bind(model_name, **_candidate_kwargs)
                 timm_kwargs.setdefault("global_pool", global_pool)
             except TypeError:
                 pass
