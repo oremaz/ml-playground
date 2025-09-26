@@ -1,12 +1,6 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Type, Optional, Sequence, Callable
-
-import os
-import sys
-pkg_root = os.path.dirname(os.path.dirname(__file__))
-if pkg_root not in sys.path:
-    sys.path.insert(0, pkg_root)
 from third_party import load_class
 import timm
 
