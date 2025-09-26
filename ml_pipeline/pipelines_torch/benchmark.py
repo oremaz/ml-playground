@@ -5,7 +5,7 @@ import random
 import numpy as np
 import torch
 from pipelines_torch.base import GeneralPipeline
-from utils.utils import save_model, save_metrics, select_best_epoch
+from utils.utils import save_model, save_metrics
 
 def set_all_seeds(seed: int):
     """Set random seed for all libraries to ensure reproducibility."""
@@ -25,7 +25,7 @@ class BenchmarkRunner:
         self,
         model_configs: List[Dict[str, Any]],
         augmentations: List[Optional[Any]],
-        metrics: List[Any],
+        metrics: Optional[List[Any]] = None,
         task_type: str = "classification",
         device: str = "cpu",
         epochs: Union[int, List[int], Dict[str, int]] = 10,
