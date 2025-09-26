@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Type, Optional, Sequence, Callable
+
+import os
+import sys
+pkg_root = os.path.dirname(os.path.dirname(__file__))
+if pkg_root not in sys.path:
+    sys.path.insert(0, pkg_root)
 from third_party import load_class
 import timm
 
@@ -360,6 +366,7 @@ class TimmVisionModel(nn.Module):
         timm_kwargs.setdefault("num_classes", num_classes)
         timm_kwargs.setdefault("pretrained", pretrained)
         timm_kwargs.setdefault("in_chans", in_chans)
+        timm_kwargs.setdefault("img_size", 32)
         if global_pool is not None:
             timm_kwargs.setdefault("global_pool", global_pool)
 
@@ -372,6 +379,7 @@ class TimmVisionModel(nn.Module):
                 # Drop unsupported kwargs one by one and retry
                 retried = False
                 if "unexpected keyword argument 'img_size'" in msg and 'img_size' in kws:
+                    print(f"Dropping unsupported 'img_size' argument for model {model_name}")
                     kws = dict(kws)
                     kws.pop('img_size', None)
                     retried = True
@@ -384,7 +392,7 @@ class TimmVisionModel(nn.Module):
                 raise
             except RuntimeError as e:
                 raise
-
+        
         self.model = _create_with_fallbacks(attempt_kwargs)
 
     def forward(self, x):
@@ -452,5 +460,5 @@ def get_model(name: str, num_classes: int = 2, **kwargs) -> nn.Module:
 
 if __name__ == "__main__":
     # Example usage and sanity check
-    model = get_model("timm_naflexvit_base", num_classes=10)
+    model = get_model("timm_vit_mae_base", num_classes=10)
     print(model)
