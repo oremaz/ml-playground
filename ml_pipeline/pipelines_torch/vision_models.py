@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Type, Optional, Sequence, Callable
+
+import os
+import sys
+pkg_root = os.path.dirname(os.path.dirname(__file__))
+if pkg_root not in sys.path:
+    sys.path.insert(0, pkg_root)
 from third_party import load_class
 import timm
 
@@ -436,13 +442,6 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "timm_vit_mae_base": _register_timm_model(
         "vit_base_patch16_224.mae", registry_name="vit_mae_base"
     ),
-    "timm_swinv2_small": _register_timm_model(
-        "swinv2_small_window8_256.ms_in1k", registry_name="swinv2_small"
-    ),
-    "timm_naflexvit_base": _register_timm_model(
-        "naflexvit_base_patch16_gap.e300_s576_in1k",
-        registry_name="naflexvit_base",
-    ),
 }
 
 
@@ -454,5 +453,5 @@ def get_model(name: str, num_classes: int = 2, **kwargs) -> nn.Module:
 
 if __name__ == "__main__":
     # Example usage and sanity check
-    model = get_model("timm_vit_mae_base", num_classes=10)
+    model = get_model("timm_naflexvit_base", num_classes=10)
     print(model)
