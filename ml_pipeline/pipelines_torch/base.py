@@ -28,6 +28,100 @@ class Evaluate:
     def _default_selection_metric(self) -> str:
         """Return default metric used to select best epoch based on task type."""
         return "roc_auc" if self.task_type == "classification" else "r2_score"
+
+
+class ComputeScore:
+    """Utility scoring helpers shared by torch and sklearn pipelines."""
+
+    @staticmethod
+    def f1(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
+        if task_type != "classification":
+            return None
+
+        try:
+            targets_array = np.asarray(targets)
+            preds_array = np.asarray(preds)
+
+            average = "binary" if len(np.unique(targets_array)) == 2 else "macro"
+
+            if preds_array.ndim > 1:
+                preds_processed = np.argmax(preds_array, axis=1)
+            else:
+                if len(np.unique(targets_array)) == 2:
+                    preds_processed = (preds_array >= 0.5).astype(int)
+                else:
+                    preds_processed = preds_array
+
+            return float(f1_score(targets_array, preds_processed, average=average, zero_division=0))
+        except Exception:
+            return None
+
+    @staticmethod
+    def r2(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
+        if task_type != "regression":
+            return None
+
+        try:
+            from sklearn.metrics import r2_score
+
+            return float(r2_score(targets, preds))
+        except Exception:
+            return None
+
+    @staticmethod
+    def roc_auc(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
+        if task_type != "classification":
+            return None
+
+        try:
+            y_true = np.asarray(targets)
+            y_scores = np.asarray(preds)
+
+            if y_scores.ndim == 1:
+                scores = y_scores
+                return float(roc_auc_score(y_true, scores))
+
+            if y_scores.ndim == 2:
+                if y_scores.shape[1] == 1:
+                    scores = y_scores[:, 0]
+                    return float(roc_auc_score(y_true, scores))
+                if y_scores.shape[1] == 2:
+                    scores = y_scores[:, 1]
+                    return float(roc_auc_score(y_true, scores))
+                return float(roc_auc_score(y_true, y_scores, multi_class="ovr", average="macro"))
+
+            return None
+        except Exception:
+            return None
+
+    @staticmethod
+    def pr_auc(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
+        if task_type != "classification":
+            return None
+
+        try:
+            y_true = np.asarray(targets)
+            y_scores = np.asarray(preds)
+
+            if y_scores.ndim == 1:
+                scores = y_scores
+                return float(average_precision_score(y_true, scores))
+
+            if y_scores.ndim == 2:
+                if y_scores.shape[1] == 1:
+                    scores = y_scores[:, 0]
+                    return float(average_precision_score(y_true, scores))
+                if y_scores.shape[1] == 2:
+                    scores = y_scores[:, 1]
+                    return float(average_precision_score(y_true, scores))
+
+                classes = np.arange(y_scores.shape[1])
+                y_true_bin = label_binarize(y_true, classes=classes)
+                return float(average_precision_score(y_true_bin, y_scores, average="macro"))
+
+            return None
+        except Exception:
+            return None
     
     def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
         """Internal data preparation method - should be implemented by subclasses."""
@@ -235,88 +329,6 @@ class GeneralPipelineSklearn(Evaluate):
         # The actual data handling is done directly in the evaluation methods
         return None
 
-    def _compute_f1_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
-        """Compute F1 score for classification tasks."""
-        if self.task_type != "classification":
-            return 0.0
-
-        # Use macro average for multi-class, binary for binary classification
-        average = 'binary' if len(np.unique(targets)) == 2 else 'macro'
-
-        try:
-            targets_array = np.asarray(targets)
-            preds_array = np.asarray(preds)
-            if preds_array.ndim > 1:
-                preds_processed = np.argmax(preds_array, axis=1)
-            else:
-                if len(np.unique(targets_array)) == 2:
-                    preds_processed = (preds_array >= 0.5).astype(int)
-                else:
-                    preds_processed = preds_array
-            return f1_score(targets_array, preds_processed, average=average, zero_division=0)
-        except Exception:
-            return 0.0
-
-    def _compute_r2_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
-        """Compute R² score for regression tasks."""
-        if self.task_type != "regression":
-            return 0.0
-
-        try:
-            from sklearn.metrics import r2_score
-            return r2_score(targets, preds)
-        except Exception:
-            return 0.0
-
-    def _compute_roc_auc(self, targets: np.ndarray, preds: np.ndarray) -> float:
-        """Compute ROC-AUC score for classification using probability outputs."""
-        if self.task_type != "classification":
-            return 0.0
-
-        try:
-            y_true = np.asarray(targets)
-            y_scores = np.asarray(preds)
-
-            if y_scores.ndim == 1:
-                scores = y_scores
-            elif y_scores.shape[1] == 1:
-                scores = y_scores[:, 0]
-            elif y_scores.shape[1] == 2:
-                scores = y_scores[:, 1]
-            else:
-                return float(roc_auc_score(y_true, y_scores, multi_class='ovr', average='macro'))
-
-            return float(roc_auc_score(y_true, scores))
-        except Exception:
-            return 0.0
-
-    def _compute_pr_auc(self, targets: np.ndarray, preds: np.ndarray) -> float:
-        """Compute PR-AUC (average precision) for classification using probability outputs."""
-        if self.task_type != "classification":
-            return 0.0
-
-        try:
-            y_true = np.asarray(targets)
-            y_scores = np.asarray(preds)
-
-            if y_scores.ndim == 1:
-                scores = y_scores
-                return float(average_precision_score(y_true, scores))
-
-            if y_scores.shape[1] == 1:
-                scores = y_scores[:, 0]
-                return float(average_precision_score(y_true, scores))
-
-            if y_scores.shape[1] == 2:
-                scores = y_scores[:, 1]
-                return float(average_precision_score(y_true, scores))
-
-            classes = np.arange(y_scores.shape[1])
-            y_true_bin = label_binarize(y_true, classes=classes)
-            return float(average_precision_score(y_true_bin, y_scores, average='macro'))
-        except Exception:
-            return 0.0
-
     def _kfold_fit(self, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
         """
         Perform k-fold cross-validation for scikit-learn models.
@@ -358,7 +370,7 @@ class GeneralPipelineSklearn(Evaluate):
             # Compute metrics
             fold_metrics = {}
             if self.task_type == "classification":
-                fold_metrics['f1_score'] = self._compute_f1_score(y_fold_val, y_pred)
+                fold_metrics['f1_score'] = ComputeScore.f1(y_fold_val, y_pred, self.task_type)
 
                 prob_preds = None
                 if hasattr(fold_model, 'predict_proba'):
@@ -367,13 +379,13 @@ class GeneralPipelineSklearn(Evaluate):
                     except Exception:
                         prob_preds = None
                 if prob_preds is not None:
-                    fold_metrics['roc_auc'] = self._compute_roc_auc(y_fold_val, prob_preds)
-                    fold_metrics['pr_auc'] = self._compute_pr_auc(y_fold_val, prob_preds)
+                    fold_metrics['roc_auc'] = ComputeScore.roc_auc(y_fold_val, prob_preds, self.task_type)
+                    fold_metrics['pr_auc'] = ComputeScore.pr_auc(y_fold_val, prob_preds, self.task_type)
                 else:
                     fold_metrics['roc_auc'] = None
                     fold_metrics['pr_auc'] = None
             else:  # regression
-                fold_metrics['r2_score'] = self._compute_r2_score(y_fold_val, y_pred)
+                fold_metrics['r2_score'] = ComputeScore.r2(y_fold_val, y_pred, self.task_type)
             
             # Compute additional metrics if provided
             for metric in self.metrics:
@@ -387,8 +399,9 @@ class GeneralPipelineSklearn(Evaluate):
             
             # Print fold results
             primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
-            if primary_metric in fold_metrics:
-                print(f"  Fold {fold + 1} {primary_metric}: {fold_metrics[primary_metric]:.4f}")
+            metric_value = fold_metrics.get(primary_metric)
+            if metric_value is not None:
+                print(f"  Fold {fold + 1} {primary_metric}: {metric_value:.4f}")
         
         # Calculate cross-validation statistics
         cv_results = self._compute_cv_statistics(fold_scores)
@@ -467,11 +480,12 @@ class GeneralPipelineSklearn(Evaluate):
         
         cv_stats = {}
         for metric in all_metrics:
-            values = [scores.get(metric, 0.0) for scores in fold_scores]
+            metric_values = [scores.get(metric) for scores in fold_scores]
+            metric_array = np.array([v if v is not None else np.nan for v in metric_values], dtype=float)
             cv_stats[metric] = {
-                'mean': float(np.mean(values)),
-                'std': float(np.std(values)),
-                'values': values
+                'mean': float(np.nanmean(metric_array)),
+                'std': float(np.nanstd(metric_array)),
+                'values': metric_array.tolist()
             }
         
         return cv_stats
@@ -708,34 +722,6 @@ class GeneralPipeline(Evaluate):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    def _compute_f1_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
-        """Compute F1 score for classification tasks."""
-        if self.task_type != "classification":
-            return 0.0
-        
-        # Convert probabilities to predictions if necessary
-        if preds.ndim > 1 and preds.shape[1] > 1:
-            preds = np.argmax(preds, axis=1)
-        
-        # Use macro average for multi-class, binary for binary classification
-        average = 'binary' if len(np.unique(targets)) == 2 else 'macro'
-        
-        try:
-            return f1_score(targets, preds, average=average, zero_division=0)
-        except:
-            return 0.0
-
-    def _compute_r2_score(self, targets: np.ndarray, preds: np.ndarray) -> float:
-        """Compute R² score for regression tasks."""
-        if self.task_type != "regression":
-            return 0.0
-        
-        try:
-            from sklearn.metrics import r2_score
-            return r2_score(targets, preds)
-        except:
-            return 0.0
-
     def _compute_class_weights(self, y: np.ndarray) -> Optional[torch.Tensor]:
         """Compute class weights for imbalanced classification."""
         if not self.use_class_weights or self.task_type != "classification":
@@ -849,8 +835,9 @@ class GeneralPipeline(Evaluate):
             
             # Print fold results
             primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
-            if primary_metric in fold_metrics:
-                print(f"  Fold {fold + 1} {primary_metric}: {fold_metrics[primary_metric]:.4f}")
+            metric_value = fold_metrics.get(primary_metric)
+            if metric_value is not None:
+                print(f"  Fold {fold + 1} {primary_metric}: {metric_value:.4f}")
         
         # Calculate cross-validation statistics
         cv_results = self._compute_cv_statistics(fold_scores)
@@ -926,11 +913,11 @@ class GeneralPipeline(Evaluate):
         metrics = {}
         
         if self.task_type == "classification":
-            metrics['f1_score'] = self._compute_f1_score(targets, preds)
-            metrics['roc_auc'] = self._compute_roc_auc(targets, preds)
-            metrics['pr_auc'] = self._compute_pr_auc(targets, preds)
+            metrics['f1_score'] = ComputeScore.f1(targets, preds, self.task_type)
+            metrics['roc_auc'] = ComputeScore.roc_auc(targets, preds, self.task_type)
+            metrics['pr_auc'] = ComputeScore.pr_auc(targets, preds, self.task_type)
         else:  # regression
-            metrics['r2_score'] = self._compute_r2_score(targets, preds)
+            metrics['r2_score'] = ComputeScore.r2(targets, preds, self.task_type)
         
         # Compute additional metrics if provided
         for metric in self.metrics:
@@ -954,11 +941,12 @@ class GeneralPipeline(Evaluate):
         
         cv_stats = {}
         for metric in all_metrics:
-            values = [scores.get(metric, 0.0) for scores in fold_scores]
+            metric_values = [scores.get(metric) for scores in fold_scores]
+            metric_array = np.array([v if v is not None else np.nan for v in metric_values], dtype=float)
             cv_stats[metric] = {
-                'mean': float(np.mean(values)),
-                'std': float(np.std(values)),
-                'values': values
+                'mean': float(np.nanmean(metric_array)),
+                'std': float(np.nanstd(metric_array)),
+                'values': metric_array.tolist()
             }
         
         return cv_stats
@@ -1243,12 +1231,12 @@ class GeneralPipeline(Evaluate):
                 
                 # Compute metrics for validation set
                 if self.task_type == "classification":
-                    current_f1 = self._compute_f1_score(targets, preds)
-                    current_roc_auc = self._compute_roc_auc(targets, preds)
-                    current_pr_auc = self._compute_pr_auc(targets, preds)
+                    current_f1 = ComputeScore.f1(targets, preds, self.task_type)
+                    current_roc_auc = ComputeScore.roc_auc(targets, preds, self.task_type)
+                    current_pr_auc = ComputeScore.pr_auc(targets, preds, self.task_type)
                     current_r2 = None  # Not needed for classification
                 else:  # regression
-                    current_r2 = self._compute_r2_score(targets, preds)
+                    current_r2 = ComputeScore.r2(targets, preds, self.task_type)
                     current_f1 = None  # Not needed for regression
 
                 for metric in self.metrics:
