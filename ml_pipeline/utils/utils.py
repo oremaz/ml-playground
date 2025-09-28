@@ -12,7 +12,7 @@ if _running_on_kaggle():
     RESULTS_DIR_IN = "/kaggle/input"
 else: 
     RESULTS_DIR = "results"
-os.makedirs(RESULTS_DIR, exist_ok=True)
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
 def save_model(model, model_name, path_start):
     if path_start is not None:
