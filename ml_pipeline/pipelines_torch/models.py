@@ -6,7 +6,7 @@ import xgboost as xgb
 import lightgbm as lgb
 from sklearn.multioutput import MultiOutputRegressor
 
-from third_party import load_class
+from third_party import load_class, resolve_repo_path
 
 # --- MLPs ---
 class TorchMLP(nn.Module):
@@ -727,88 +727,262 @@ class ThirdPartyTabularModel(nn.Module):
 
 
 class TabRWrapper(ThirdPartyTabularModel):
+    """Wrapper around the TabR reference implementation (NeurIPS 2024)."""
+
     def __init__(
         self,
         input_dim: int,
         num_classes: int,
         *,
         repo_path: Optional[str] = None,
-        env_var: str = "TABR_REPO",
-        class_name: str = "TabR",
-        module_candidates: Optional[Sequence[str]] = (
-            "tabr.model",
-            "tabular_dl_tabr.model",
-            "tabr",
-        ),
         model_kwargs: Optional[dict] = None,
     ) -> None:
+        nn.Module.__init__(self)
+
+        from importlib.util import module_from_spec, spec_from_file_location
+
+        repo_dir = resolve_repo_path(
+            "tabular-dl-tabr", repo_path=repo_path, env_var=env_var
+        )
+        tabr_entry = repo_dir / "bin" / "tabr.py"
+        if not tabr_entry.exists():
+            raise FileNotFoundError(
+                f"Unable to locate TabR entry point at '{tabr_entry}'."
+            )
+
+        spec = spec_from_file_location("third_party.tabr", tabr_entry)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot create import spec for '{tabr_entry}'.")
+
+        module = module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)  # type: ignore[arg-type]
+        except ImportError as exc:
+            raise ImportError(
+                "TabR dependencies are missing. Install the requirements listed in "
+                "tabular-dl-tabr/environment-simple.yaml (faiss, delu, etc.)."
+            ) from exc
+
+        ModelCls = getattr(module, "Model", None)
+        if ModelCls is None:
+            raise ImportError("'Model' class not found in bin/tabr.py")
+
         kwargs = dict(model_kwargs or {})
-        kwargs.setdefault("input_dim", input_dim)
-        kwargs.setdefault("num_classes", num_classes)
-        super().__init__(
-            "tabular-dl-tabr",
-            class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-            init_kwargs=kwargs,
+        n_num_features = kwargs.pop("n_num_features", input_dim)
+        n_bin_features = kwargs.pop("n_bin_features", 0)
+        cat_cardinalities = list(kwargs.pop("cat_cardinalities", []))
+        n_classes = kwargs.pop(
+            "n_classes", num_classes if num_classes > 1 else None
+        )
+
+        defaults = {
+            "num_embeddings": None,
+            "d_main": 128,
+            "d_multiplier": 2.0,
+            "encoder_n_blocks": 2,
+            "predictor_n_blocks": 2,
+            "mixer_normalization": "auto",
+            "context_dropout": 0.0,
+            "dropout0": 0.1,
+            "dropout1": "dropout0",
+            "normalization": "LayerNorm",
+            "activation": "ReLU",
+            "memory_efficient": False,
+            "candidate_encoding_batch_size": None,
+        }
+        for key, value in defaults.items():
+            kwargs.setdefault(key, value)
+
+        self.context_size = int(max(1, kwargs.pop("context_size", 32)))
+        self._candidate_x = self._normalize_feature_dict(
+            kwargs.pop("candidate_x", None)
+        )
+        self._candidate_y = kwargs.pop("candidate_y", None)
+        self._is_classification = n_classes is not None
+
+        self.inner = ModelCls(
+            n_num_features=n_num_features,
+            n_bin_features=n_bin_features,
+            cat_cardinalities=cat_cardinalities,
+            n_classes=n_classes,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _normalize_feature_dict(
+        value: Optional[Any],
+    ) -> Optional[dict[str, torch.Tensor]]:
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items() if v is not None}
+        if isinstance(value, torch.Tensor):
+            return {"num": value}
+        raise TypeError(
+            "TabR candidate features must be provided as a Tensor or a dict of tensors."
+        )
+
+    def set_candidates(
+        self,
+        features: dict[str, torch.Tensor],
+        targets: torch.Tensor,
+    ) -> None:
+        self._candidate_x = self._normalize_feature_dict(features)
+        self._candidate_y = targets
+
+    def forward(self, x: Any) -> torch.Tensor:  # type: ignore[override]
+        features = self._normalize_feature_dict(x)
+        if features is None:
+            raise ValueError("TabRWrapper requires feature tensors to be provided.")
+
+        candidate_x = self._candidate_x or features
+        candidate_y = self._candidate_y
+        if candidate_y is None:
+            representative = next(iter(candidate_x.values()))
+            size = representative.shape[0]
+            dtype = torch.long if self._is_classification else torch.float32
+            candidate_y = torch.zeros(size, dtype=dtype, device=representative.device)
+
+        context_size = max(1, min(self.context_size, candidate_y.shape[0]))
+
+        return self.inner(
+            x_=features,
+            y=None,
+            candidate_x_=candidate_x,
+            candidate_y=candidate_y,
+            context_size=context_size,
+            is_train=False,
         )
 
 
 class GrandeWrapper(ThirdPartyTabularModel):
+    """Thin wrapper around the official GRANDE TensorFlow model."""
+
     def __init__(
         self,
         input_dim: int,
         num_classes: int,
         *,
         repo_path: Optional[str] = None,
-        env_var: str = "GRANDE_REPO",
-        class_name: str = "GRANDE",
-        module_candidates: Optional[Sequence[str]] = (
-            "grande.model",
-            "grande",
-        ),
         model_kwargs: Optional[dict] = None,
     ) -> None:
+        nn.Module.__init__(self)
+
         kwargs = dict(model_kwargs or {})
-        kwargs.setdefault("input_dim", input_dim)
-        kwargs.setdefault("num_classes", num_classes)
-        super().__init__(
+        params = kwargs.pop("params", {})
+        args = kwargs.pop("args", {})
+
+        params_defaults = {
+            "depth": 5,
+            "n_estimators": 512,
+            "learning_rate_weights": 0.01,
+            "learning_rate_index": 0.01,
+            "learning_rate_values": 0.01,
+            "learning_rate_leaf": 0.01,
+            "optimizer": "adam",
+            "cosine_decay_steps": 0,
+            "loss": "crossentropy" if num_classes > 1 else "mse",
+            "focal_loss": False,
+            "temperature": 0.0,
+            "from_logits": True,
+            "use_class_weights": False,
+            "dropout": 0.0,
+            "selected_variables": 1.0,
+            "data_subset_fraction": 1.0,
+            "objective": "classification" if num_classes > 1 else "regression",
+            "random_seed": 42,
+        }
+        params_defaults.update(params)
+
+        args_defaults = {
+            "epochs": 100,
+            "early_stopping_epochs": 20,
+            "batch_size": 64,
+            "cat_idx": kwargs.pop("cat_idx", []),
+            "objective": params_defaults["objective"],
+            "random_seed": params_defaults["random_seed"],
+            "verbose": 0,
+        }
+        args_defaults.update(args)
+
+        GrandeCls = load_class(
             "grande",
-            class_name,
+            "GRANDE",
             repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-            init_kwargs=kwargs,
+            module_candidates=("GRANDE.GRANDE", "GRANDE"),
         )
+
+        params_defaults.setdefault("num_columns", list(range(input_dim)))
+        params_defaults.setdefault("cat_idx", args_defaults["cat_idx"])
+
+        self.inner = GrandeCls(params=params_defaults, args=args_defaults)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        if self.training:
+            raise RuntimeError("GrandeWrapper currently supports inference only.")
+
+        if not isinstance(x, torch.Tensor):
+            raise TypeError("GrandeWrapper expects a torch.Tensor input.")
+
+        preds = self.inner.predict(x.detach().cpu().numpy())
+        return torch.from_numpy(preds).to(x.device)
 
 
 class TabMWrapper(ThirdPartyTabularModel):
+    """Wrapper around the official TabM implementation."""
+
     def __init__(
         self,
         input_dim: int,
         num_classes: int,
         *,
         repo_path: Optional[str] = None,
-        env_var: str = "TABM_REPO",
-        class_name: str = "TabM",
-        module_candidates: Optional[Sequence[str]] = (
-            "tabm.model",
-            "tabm",
-        ),
         model_kwargs: Optional[dict] = None,
     ) -> None:
+        nn.Module.__init__(self)
+
         kwargs = dict(model_kwargs or {})
-        kwargs.setdefault("input_dim", input_dim)
-        kwargs.setdefault("num_classes", num_classes)
-        super().__init__(
+
+        tabm_cls = load_class(
             "tabm",
-            class_name,
+            "TabM",
             repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-            init_kwargs=kwargs,
+            module_candidates=("tabm", "tabm.tabm"),
         )
+
+        n_num_features = kwargs.pop("n_num_features", input_dim)
+        cat_cardinalities = list(kwargs.pop("cat_cardinalities", []))
+        d_out = kwargs.pop("d_out", num_classes if num_classes > 1 else None)
+        num_embeddings = kwargs.pop("num_embeddings", None)
+
+        defaults = {
+            "k": 16,
+            "n_blocks": 3,
+            "d_block": 512,
+            "dropout": 0.1,
+            "activation": "ReLU",
+            "arch_type": "tabm",
+            "start_scaling_init": None,
+        }
+        for key, value in defaults.items():
+            kwargs.setdefault(key, value)
+
+        if kwargs.pop("use_make", True):
+            self.inner = tabm_cls.make(
+                n_num_features=n_num_features,
+                cat_cardinalities=cat_cardinalities,
+                d_out=d_out,
+                num_embeddings=num_embeddings,
+                **kwargs,
+            )
+        else:
+            self.inner = tabm_cls(
+                n_num_features=n_num_features,
+                cat_cardinalities=cat_cardinalities,
+                d_out=d_out,
+                num_embeddings=num_embeddings,
+                **kwargs,
+            )
 
 
 # --- Registry ---

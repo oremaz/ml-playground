@@ -266,9 +266,6 @@ class ThirdPartyModelWrapper(nn.Module):
         repo_name: str,
         class_name: str,
         *,
-        repo_path: Optional[str] = None,
-        env_var: Optional[str] = None,
-        module_candidates: Optional[Sequence[str]] = None,
         init_args: Optional[Sequence] = None,
         init_kwargs: Optional[dict] = None,
     ) -> None:
@@ -278,9 +275,6 @@ class ThirdPartyModelWrapper(nn.Module):
         self._cls = load_class(
             repo_name,
             class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
         )
         self.inner = self._cls(*init_args, **init_kwargs)
 
@@ -295,14 +289,8 @@ class FatFormerOfficial(ThirdPartyModelWrapper):
         self,
         num_classes: int = 2,
         *,
-        repo_path: Optional[str] = None,
         class_name: str = "CLIPModel",
-        module_candidates: Optional[Sequence[str]] = (
-            "FatFormer.models.clip_models",
-            "models.clip_models",
-        ),
         model_kwargs: Optional[dict] = None,
-        env_var: str = "FATFORMER_REPO",
         clip_variant: str = "ViT-L/14",
         num_context_embedding: int = 8,
         init_context_embedding: str = "",
@@ -339,9 +327,6 @@ class FatFormerOfficial(ThirdPartyModelWrapper):
         super().__init__(
             "FatFormer",
             class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
             init_kwargs=kwargs,
         )
 
@@ -360,7 +345,6 @@ class DiffusionFakeOfficial(ThirdPartyModelWrapper):
             "models.image",
         ),
         model_kwargs: Optional[dict] = None,
-        env_var: str = "DIFFUSIONFAKE_REPO",
         encoder_name: str = "tf_efficientnet_b4_ns",
     ) -> None:
         kwargs = dict(model_kwargs or {})
