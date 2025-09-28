@@ -3,7 +3,10 @@ import joblib
 import torch
 import pandas as pd
 import numpy as np
-from kaggle_utils import _running_on_kaggle
+try: 
+    from .kaggle_utils import _running_on_kaggle
+except Exception:
+    from kaggle_utils import _running_on_kaggle
 if _running_on_kaggle():
     RESULTS_DIR_OUT = "/kaggle/working/results"
     RESULTS_DIR_IN = "/kaggle/input"
