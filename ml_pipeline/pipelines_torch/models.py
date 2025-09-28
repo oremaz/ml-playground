@@ -735,6 +735,7 @@ class TabRWrapper(ThirdPartyTabularModel):
         num_classes: int,
         *,
         repo_path: Optional[str] = None,
+        env_var: str = "TABR_REPO",
         model_kwargs: Optional[dict] = None,
     ) -> None:
         nn.Module.__init__(self)
@@ -864,6 +865,7 @@ class GrandeWrapper(ThirdPartyTabularModel):
         num_classes: int,
         *,
         repo_path: Optional[str] = None,
+        env_var: str = "GRANDE_REPO",
         model_kwargs: Optional[dict] = None,
     ) -> None:
         nn.Module.__init__(self)
@@ -909,6 +911,7 @@ class GrandeWrapper(ThirdPartyTabularModel):
             "grande",
             "GRANDE",
             repo_path=repo_path,
+            env_var=env_var,
             module_candidates=("GRANDE.GRANDE", "GRANDE"),
         )
 
@@ -937,6 +940,7 @@ class TabMWrapper(ThirdPartyTabularModel):
         num_classes: int,
         *,
         repo_path: Optional[str] = None,
+        env_var: str = "TABM_REPO",
         model_kwargs: Optional[dict] = None,
     ) -> None:
         nn.Module.__init__(self)
@@ -947,6 +951,7 @@ class TabMWrapper(ThirdPartyTabularModel):
             "tabm",
             "TabM",
             repo_path=repo_path,
+            env_var=env_var,
             module_candidates=("tabm", "tabm.tabm"),
         )
 

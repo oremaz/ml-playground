@@ -4,10 +4,11 @@ from typing import Dict, Type, Optional, Sequence, Callable
 
 import os
 import sys
+import contextlib
 pkg_root = os.path.dirname(os.path.dirname(__file__))
 if pkg_root not in sys.path:
     sys.path.insert(0, pkg_root)
-from third_party import load_class
+from third_party import load_class, resolve_repo_path
 import timm
 
 class SimpleCNN(nn.Module):
@@ -266,6 +267,9 @@ class ThirdPartyModelWrapper(nn.Module):
         repo_name: str,
         class_name: str,
         *,
+        repo_path: Optional[str] = None,
+        env_var: Optional[str] = None,
+        module_candidates: Optional[Sequence[str]] = None,
         init_args: Optional[Sequence] = None,
         init_kwargs: Optional[dict] = None,
     ) -> None:
@@ -275,8 +279,24 @@ class ThirdPartyModelWrapper(nn.Module):
         self._cls = load_class(
             repo_name,
             class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
         )
-        self.inner = self._cls(*init_args, **init_kwargs)
+        # Instantiate inside the repo directory so relative paths in the third-party
+        # code (e.g., 'pretrained/ViT-L-14.pt') resolve correctly.
+        repo_dir = resolve_repo_path(repo_name, repo_path=repo_path, env_var=env_var)
+        cwd = os.getcwd()
+        try:
+            os.chdir(str(repo_dir))
+            try:
+                self.inner = self._cls(*init_args, **init_kwargs)
+            except ModuleNotFoundError as e:
+                # Provide a clearer hint for common optional deps
+                raise
+        finally:
+            with contextlib.suppress(Exception):
+                os.chdir(cwd)
 
     def forward(self, *args, **kwargs):  # type: ignore[override]
         return self.inner(*args, **kwargs)
@@ -289,8 +309,14 @@ class FatFormerOfficial(ThirdPartyModelWrapper):
         self,
         num_classes: int = 2,
         *,
+        repo_path: Optional[str] = None,
         class_name: str = "CLIPModel",
+        module_candidates: Optional[Sequence[str]] = (
+            "FatFormer.models.clip_models",
+            "models.clip_models",
+        ),
         model_kwargs: Optional[dict] = None,
+        env_var: str = "FATFORMER_REPO",
         clip_variant: str = "ViT-L/14",
         num_context_embedding: int = 8,
         init_context_embedding: str = "",
@@ -327,6 +353,9 @@ class FatFormerOfficial(ThirdPartyModelWrapper):
         super().__init__(
             "FatFormer",
             class_name,
+            repo_path=repo_path,
+            env_var=env_var,
+            module_candidates=module_candidates,
             init_kwargs=kwargs,
         )
 
@@ -345,6 +374,7 @@ class DiffusionFakeOfficial(ThirdPartyModelWrapper):
             "models.image",
         ),
         model_kwargs: Optional[dict] = None,
+        env_var: str = "DIFFUSIONFAKE_REPO",
         encoder_name: str = "tf_efficientnet_b4_ns",
     ) -> None:
         kwargs = dict(model_kwargs or {})
