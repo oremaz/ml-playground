@@ -1,3 +1,13 @@
+"""Tabular augmentation utilities with official research integrations."""
+from __future__ import annotations
+
+from typing import Optional, Sequence, Tuple
+
+import numpy as np
+
+from third_party import load_class
+
+
 from typing import Tuple, Optional, Callable, Dict
 import numpy as np
 
@@ -166,16 +176,6 @@ def smotetomek_augmentation(X: np.ndarray, y: np.ndarray, random_state: Optional
         sampling_strategy = _calculate_sampling_strategy(y, max_factor)
     sampler = SMOTETomek(random_state=random_state, sampling_strategy=sampling_strategy)
     return sampler.fit_resample(X, y)
-
-
-"""Tabular augmentation utilities with official research integrations."""
-from __future__ import annotations
-
-from typing import Optional, Sequence, Tuple
-
-import numpy as np
-
-from third_party import load_class
 
 
 class MGS_GRF_Augmentor:

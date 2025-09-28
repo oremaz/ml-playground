@@ -115,7 +115,6 @@ class BenchmarkRunner:
         Returns:
             DataFrame with benchmark results
         """
-        results = []
         if self.path_start: 
             self.save_path = f"results/{self.path_start}"
             # Create the path if it doesn't exist

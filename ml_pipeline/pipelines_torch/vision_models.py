@@ -296,18 +296,46 @@ class FatFormerOfficial(ThirdPartyModelWrapper):
         num_classes: int = 2,
         *,
         repo_path: Optional[str] = None,
-        class_name: str = "FatFormer",
+        class_name: str = "CLIPModel",
         module_candidates: Optional[Sequence[str]] = (
-            "models.fatformer",
-            "fatformer",
-            "FatFormer.models.fatformer",
+            "FatFormer.models.clip_models",
+            "models.clip_models",
         ),
         model_kwargs: Optional[dict] = None,
         env_var: str = "FATFORMER_REPO",
+        clip_variant: str = "ViT-L/14",
+        num_context_embedding: int = 8,
+        init_context_embedding: str = "",
+        num_vit_adapter: int = 8,
     ) -> None:
         kwargs = dict(model_kwargs or {})
-        if num_classes is not None and "num_classes" not in kwargs:
-            kwargs["num_classes"] = num_classes
+
+        # Allow overrides via model_kwargs while guarding against unexpected
+        # arguments being forwarded to the third-party constructor.
+        clip_variant = kwargs.pop("clip_variant", clip_variant)
+        from types import SimpleNamespace
+
+        args_namespace = kwargs.pop("args", None)
+        if args_namespace is None:
+            args_namespace = SimpleNamespace(
+                num_context_embedding=kwargs.pop("num_context_embedding", num_context_embedding),
+                init_context_embedding=kwargs.pop("init_context_embedding", init_context_embedding),
+                num_vit_adapter=kwargs.pop("num_vit_adapter", num_vit_adapter),
+                num_classes=num_classes,
+            )
+        else:
+            if num_classes is not None and not hasattr(args_namespace, "num_classes"):
+                setattr(args_namespace, "num_classes", num_classes)
+            if not hasattr(args_namespace, "num_context_embedding"):
+                setattr(args_namespace, "num_context_embedding", kwargs.pop("num_context_embedding", num_context_embedding))
+            if not hasattr(args_namespace, "init_context_embedding"):
+                setattr(args_namespace, "init_context_embedding", kwargs.pop("init_context_embedding", init_context_embedding))
+            if not hasattr(args_namespace, "num_vit_adapter"):
+                setattr(args_namespace, "num_vit_adapter", kwargs.pop("num_vit_adapter", num_vit_adapter))
+
+        kwargs.setdefault("name", kwargs.pop("name", clip_variant))
+        kwargs["args"] = args_namespace
+
         super().__init__(
             "FatFormer",
             class_name,
@@ -326,17 +354,20 @@ class DiffusionFakeOfficial(ThirdPartyModelWrapper):
         num_classes: int = 2,
         *,
         repo_path: Optional[str] = None,
-        class_name: str = "DiffusionDetector",
+        class_name: str = "BinaryClassifier",
         module_candidates: Optional[Sequence[str]] = (
-            "models.detector",
-            "diffusionfake.models.detector",
+            "DiffusionFake.models.image",
+            "models.image",
         ),
         model_kwargs: Optional[dict] = None,
         env_var: str = "DIFFUSIONFAKE_REPO",
+        encoder_name: str = "tf_efficientnet_b4_ns",
     ) -> None:
         kwargs = dict(model_kwargs or {})
-        if num_classes is not None and "num_classes" not in kwargs:
-            kwargs["num_classes"] = num_classes
+        kwargs.setdefault("encoder", kwargs.pop("encoder", encoder_name))
+        if num_classes is not None:
+            kwargs.setdefault("num_classes", num_classes)
+
         super().__init__(
             "DiffusionFake",
             class_name,

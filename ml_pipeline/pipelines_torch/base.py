@@ -9,7 +9,7 @@ from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score, roc_auc_score, average_precision_score
 from sklearn.preprocessing import label_binarize
-from utils.utils import select_best_epoch, calculate_combined_score_for_epoch
+from utils.utils import select_best_epoch
 
 
 class Evaluate:
@@ -1040,18 +1040,6 @@ class GeneralPipeline(Evaluate):
         """
         return select_best_epoch(self.history, self.task_type, metric=self._default_selection_metric())
 
-    def _calculate_combined_score_for_epoch(self, target_epoch: int) -> float:
-        """
-        Calculate combined score for a specific epoch using centralized logic from utils.utils.
-        Used for early stopping to ensure consistency.
-        """
-        return calculate_combined_score_for_epoch(
-            self.history,
-            target_epoch,
-            self.task_type,
-            metric=self._default_selection_metric(),
-        )
-
     def _reset_model(self):
         """Reset model weights and optimizer for k-fold training."""
         # Re-initialize model weights
@@ -1164,7 +1152,7 @@ class GeneralPipeline(Evaluate):
         patience = 0
         best_epoch = 0  # Track which epoch was selected as best
         epoch_weights = []  # Store weights from each epoch for post-training selection
-        best_combined_score = float('inf')  # For combined score early stopping
+        best_val_loss = float('inf')  # For validation loss early stopping
         
         for epoch in range(self.epochs):
             self.model.train()
@@ -1249,23 +1237,16 @@ class GeneralPipeline(Evaluate):
                 # Store raw scores in history - selection logic will be applied post-training
                 # This ensures consistency between training and BenchmarkRunner selection
                 
-                # Early stopping based on combined score (consistent with final selection)
-                if self.early_stopping and len(self.history) >= 2:  # Need at least 2 epochs for comparison
-                    # Calculate combined score for current epoch using same logic as _select_best_epoch
-                    current_combined_score = self._calculate_combined_score_for_epoch(len(self.history) - 1)
-                    
-                    if len(self.history) == 1:
-                        best_combined_score = current_combined_score
+                # Early stopping based on validation loss
+                if self.early_stopping:
+                    if val_loss is not None and val_loss < best_val_loss:
+                        best_val_loss = val_loss
                         patience = 0
                     else:
-                        if current_combined_score < best_combined_score:
-                            best_combined_score = current_combined_score
-                            patience = 0
-                        else:
-                            patience += 1
+                        patience += 1
                     
                     if patience >= self.early_stopping:
-                        print(f"Early stopping at epoch {epoch+1} due to combined score plateau")
+                        print(f"Early stopping at epoch {epoch+1} due to validation loss plateau")
                         break
             
             # Print progress
@@ -1303,7 +1284,7 @@ class GeneralPipeline(Evaluate):
         # Post-training: Apply selection logic to determine best epoch and weights
         if self.history and epoch_weights:
             best_epoch = self._select_best_epoch()
-            print(f"Selected best epoch: {best_epoch + 1} based on combined score")
+            print(f"Selected best epoch: {best_epoch + 1} based on selection metric")
             
             # Use weights from the selected best epoch
             if best_epoch < len(epoch_weights):
