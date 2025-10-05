@@ -234,6 +234,46 @@ class TabEBMGenerator:
         return self.model.sample_conditioned(n_samples, conditioned_on)
 
 
+
+def mgs_grf_augmentation(
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    target_class: Optional[int] = None,
+    max_factor: float = 2.0,
+    random_state: Optional[int] = None,
+    init_kwargs: Optional[dict] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Apply MGS-GRF augmentation with adaptive sampling based on max_factor."""
+    from collections import Counter
+
+    if X is None or y is None:
+        return X, y
+
+    class_counts = Counter(y)
+    if not class_counts or len(class_counts) <= 1:
+        return X, y
+
+    if target_class is None:
+        target_class = min(class_counts, key=class_counts.get)
+
+    majority = max(class_counts.values())
+    target_size = int(majority / max_factor) if max_factor and max_factor > 0 else majority
+    target_size = max(target_size, class_counts[target_class])
+    n_samples = max(0, target_size - class_counts[target_class])
+    if n_samples <= 0:
+        return X, y
+
+    augmentor = MGS_GRF_Augmentor(init_kwargs=init_kwargs)
+    X_aug, y_aug = augmentor.fit_resample(
+        X,
+        y,
+        target_class=target_class,
+        n_samples=n_samples,
+    )
+    return X_aug, y_aug
+
+
 # --- Registry ---
 AUGMENTATION_REGISTRY: Dict[str, Callable] = {
     # No augmentation
@@ -247,6 +287,7 @@ AUGMENTATION_REGISTRY: Dict[str, Callable] = {
     # Custom (include TomekLinks cleaning)
     "mixup": mixup_augmentation,
     "mixup_smote": lambda X, y, alpha=0.2, random_state=42, max_factor=2.0: mixup_smote_augmentation(X, y, n_samples=X.shape[0], alpha=alpha, random_state=random_state, max_factor=max_factor),
+    "mgs_grf": mgs_grf_augmentation,
     # Hybrid samplers (already include cleaning)
     "smoteenn": smoteenn_augmentation,
     "smotetomek": smotetomek_augmentation,
@@ -255,7 +296,7 @@ AUGMENTATION_REGISTRY: Dict[str, Callable] = {
 # --- Documentation ---
 """
 AUGMENTATION_REGISTRY keys:
-- 'smote', 'borderline_smote', 'svm_smote', 'kmeans_smote', 'adasyn', 'random_oversampler', 'smoteenn', 'smotetomek', 'mixup', 'mixup_smote', 'smote_gaussian', 'none'
+- 'smote', 'borderline_smote', 'svm_smote', 'kmeans_smote', 'adasyn', 'random_oversampler', 'smoteenn', 'smotetomek', 'mixup', 'mixup_smote', 'mgs_grf', 'smote_gaussian', 'none'
 - All SMOTE variants and hybrid samplers are for classification only.
 - Mixup and none can be used for regression or classification.
 - All oversampling methods (except mixup and none) automatically apply TomekLinks cleaning after generation.
