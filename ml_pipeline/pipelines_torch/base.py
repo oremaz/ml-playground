@@ -523,6 +523,10 @@ class GeneralPipelineSklearn(Evaluate):
             results[metric_key] = metric(y, y_pred)
         return results
 
+    def evaluate(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        """Lightweight wrapper exposing sklearn evaluation for the benchmark runner."""
+        return self._evaluate(X, y)
+
     def fit(self, X, y):
         """
         Train the scikit-learn model with optional k-fold cross-validation.
