@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 from typing import Callable, List, Optional, Dict, Any, Tuple, Union
 import numpy as np
 import random
+from functools import partial
 from collections.abc import Sized
 from typing import cast
 from sklearn.utils.class_weight import compute_class_weight
@@ -13,21 +14,141 @@ from utils.utils import select_best_epoch
 
 
 class Evaluate:
-    """
-    Base class for evaluation methods shared across different pipeline types.
-    """
-    
-    def __init__(self):
-        # These attributes should be set by inheriting classes
+    """Base utilities shared across torch and sklearn pipelines."""
+
+    def __init__(self) -> None:
+        # These attributes should be set by subclasses
         self.model = None
         self.task_type = "classification"
         self.metrics = []
         self.batch_size = 32
         self.random_state = 42
+        self.device = "cpu"
 
     def _default_selection_metric(self) -> str:
-        """Return default metric used to select best epoch based on task type."""
+        """Return the metric name used to pick the best epoch."""
         return "roc_auc" if self.task_type == "classification" else "r2_score"
+
+    def prepare_data_internal(
+        self,
+        X: np.ndarray,
+        y: Optional[np.ndarray] = None,
+        *,
+        train: bool = True,
+    ) -> DataLoader:
+        """Subclasses must implement how raw arrays become loaders."""
+        raise NotImplementedError("Subclasses must implement prepare_data_internal")
+
+    # ----- Evaluation helpers -------------------------------------------------
+    def evaluate(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        if X is None or y is None:
+            return {}
+        if hasattr(self, "model") and hasattr(self.model, "eval"):
+            return self._evaluate_torch(X, y)
+        return self._evaluate_sklearn(X, y)
+
+    def _evaluate_torch(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        loader: DataLoader = self.prepare_data_internal(X, y, train=False)
+        self.model.eval()
+        preds, targets = [], []
+        with torch.no_grad():
+            for batch in loader:
+                xb, yb = batch
+                xb = xb.to(self.device)
+                yb = yb.to(self.device)
+                logits = self.model(xb)
+                if self.task_type == "regression":
+                    outputs = logits.squeeze(-1)
+                else:
+                    outputs = torch.softmax(logits, dim=1)
+                preds.append(outputs.cpu())
+                targets.append(yb.cpu())
+        preds_np = torch.cat(preds).numpy()
+        targets_np = torch.cat(targets).numpy()
+        results: Dict[str, float] = {}
+        for metric in self.metrics:
+            key = getattr(metric, "name", None) or getattr(metric, "__name__", None) or str(metric)
+            try:
+                results[key] = float(metric(targets_np, preds_np))
+            except Exception:
+                results[key] = 0.0
+        return results
+
+    def _evaluate_sklearn(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        if not hasattr(self.model, "predict"):
+            raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
+        y_pred = self.model.predict(X)
+        results: Dict[str, float] = {}
+        for metric in self.metrics:
+            key = getattr(metric, "name", None) or getattr(metric, "__name__", None) or str(metric)
+            try:
+                results[key] = float(metric(y, y_pred))
+            except Exception:
+                results[key] = 0.0
+        return results
+
+    # ----- Prediction helpers -------------------------------------------------
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        if hasattr(self, "model") and hasattr(self.model, "eval"):
+            return self._predict_torch(X)
+        return self._predict_sklearn(X)
+
+    def _predict_torch(self, X: np.ndarray) -> np.ndarray:
+        loader: DataLoader = self.prepare_data_internal(X, train=False)
+        self.model.eval()
+        preds = []
+        with torch.no_grad():
+            for batch in loader:
+                xb = batch[0] if isinstance(batch, (list, tuple)) else batch
+                xb = xb.to(self.device)
+                logits = self.model(xb)
+                if self.task_type == "regression":
+                    preds.append(logits.squeeze(-1).cpu())
+                else:
+                    if logits.ndim == 1:
+                        logits = logits.unsqueeze(-1)
+                    if logits.shape[1] == 1:
+                        probs = torch.sigmoid(logits).squeeze(-1)
+                        preds.append((probs > 0.5).long().cpu())
+                    else:
+                        preds.append(torch.softmax(logits, dim=1).argmax(dim=1).cpu())
+        return torch.cat(preds).numpy()
+
+    def _predict_sklearn(self, X: np.ndarray) -> np.ndarray:
+        if hasattr(self.model, "predict"):
+            return self.model.predict(X)
+        raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        if self.task_type != "classification":
+            raise ValueError("predict_proba is only available for classification tasks")
+        if hasattr(self, "model") and hasattr(self.model, "eval"):
+            return self._predict_proba_torch(X)
+        return self._predict_proba_sklearn(X)
+
+    def _predict_proba_torch(self, X: np.ndarray) -> np.ndarray:
+        loader: DataLoader = self.prepare_data_internal(X, train=False)
+        self.model.eval()
+        probs_list = []
+        with torch.no_grad():
+            for batch in loader:
+                xb = batch[0] if isinstance(batch, (list, tuple)) else batch
+                xb = xb.to(self.device)
+                logits = self.model(xb)
+                if logits.ndim == 1:
+                    logits = logits.unsqueeze(-1)
+                if logits.shape[1] == 1:
+                    pos = torch.sigmoid(logits).squeeze(-1)
+                    probs = torch.stack((1 - pos, pos), dim=1)
+                else:
+                    probs = torch.softmax(logits, dim=1)
+                probs_list.append(probs.cpu())
+        return torch.cat(probs_list).numpy()
+
+    def _predict_proba_sklearn(self, X: np.ndarray) -> np.ndarray:
+        if hasattr(self.model, "predict_proba"):
+            return self.model.predict_proba(X)
+        raise ValueError("Model does not support predict_proba")
 
 
 class ComputeScore:
@@ -37,13 +158,10 @@ class ComputeScore:
     def f1(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
         if task_type != "classification":
             return None
-
         try:
             targets_array = np.asarray(targets)
             preds_array = np.asarray(preds)
-
             average = "binary" if len(np.unique(targets_array)) == 2 else "macro"
-
             if preds_array.ndim > 1:
                 preds_processed = np.argmax(preds_array, axis=1)
             else:
@@ -51,7 +169,6 @@ class ComputeScore:
                     preds_processed = (preds_array >= 0.5).astype(int)
                 else:
                     preds_processed = preds_array
-
             return float(f1_score(targets_array, preds_processed, average=average, zero_division=0))
         except Exception:
             return None
@@ -60,10 +177,8 @@ class ComputeScore:
     def r2(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
         if task_type != "regression":
             return None
-
         try:
             from sklearn.metrics import r2_score
-
             return float(r2_score(targets, preds))
         except Exception:
             return None
@@ -72,24 +187,17 @@ class ComputeScore:
     def roc_auc(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
         if task_type != "classification":
             return None
-
         try:
             y_true = np.asarray(targets)
             y_scores = np.asarray(preds)
-
             if y_scores.ndim == 1:
-                scores = y_scores
-                return float(roc_auc_score(y_true, scores))
-
+                return float(roc_auc_score(y_true, y_scores))
             if y_scores.ndim == 2:
                 if y_scores.shape[1] == 1:
-                    scores = y_scores[:, 0]
-                    return float(roc_auc_score(y_true, scores))
+                    return float(roc_auc_score(y_true, y_scores[:, 0]))
                 if y_scores.shape[1] == 2:
-                    scores = y_scores[:, 1]
-                    return float(roc_auc_score(y_true, scores))
+                    return float(roc_auc_score(y_true, y_scores[:, 1]))
                 return float(roc_auc_score(y_true, y_scores, multi_class="ovr", average="macro"))
-
             return None
         except Exception:
             return None
@@ -98,157 +206,23 @@ class ComputeScore:
     def pr_auc(targets: np.ndarray, preds: np.ndarray, task_type: str) -> Optional[float]:
         if task_type != "classification":
             return None
-
         try:
             y_true = np.asarray(targets)
             y_scores = np.asarray(preds)
-
             if y_scores.ndim == 1:
-                scores = y_scores
-                return float(average_precision_score(y_true, scores))
-
+                return float(average_precision_score(y_true, y_scores))
             if y_scores.ndim == 2:
                 if y_scores.shape[1] == 1:
-                    scores = y_scores[:, 0]
-                    return float(average_precision_score(y_true, scores))
+                    return float(average_precision_score(y_true, y_scores[:, 0]))
                 if y_scores.shape[1] == 2:
-                    scores = y_scores[:, 1]
-                    return float(average_precision_score(y_true, scores))
-
+                    return float(average_precision_score(y_true, y_scores[:, 1]))
                 classes = np.arange(y_scores.shape[1])
                 y_true_bin = label_binarize(y_true, classes=classes)
                 return float(average_precision_score(y_true_bin, y_scores, average="macro"))
-
             return None
         except Exception:
             return None
-    
-    def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
-        """Internal data preparation method - should be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement prepare_data_internal")
-    
-    def evaluate(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
-        """Evaluate model performance on given data."""
-        if X is None or y is None:
-            return {}
         
-        # Check if this is a PyTorch model or sklearn model
-        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
-            # PyTorch model evaluation
-            return self._evaluate_torch(X, y)
-        else:
-            # sklearn model evaluation
-            return self._evaluate_sklearn(X, y)
-    
-    def _evaluate_torch(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
-        """Evaluate PyTorch model."""
-        loader: DataLoader = self.prepare_data_internal(X, y, train=False)
-        self.model.eval()
-        all_preds = []
-        all_targets = []
-        with torch.no_grad():
-            for batch in loader:
-                Xb, yb = batch
-                Xb, yb = Xb.to(self.device), yb.to(self.device)
-                outputs = self.model(Xb)
-                if self.task_type == "regression":
-                    outputs = outputs.squeeze()
-                else:
-                    outputs = torch.softmax(outputs, dim=1)
-                all_preds.append(outputs.cpu())
-                all_targets.append(yb.cpu())
-        preds = torch.cat(all_preds).numpy()
-        targets = torch.cat(all_targets).numpy()
-        results = {}
-        for metric in self.metrics:
-            metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
-            try:
-                results[metric_key] = metric(targets, preds)
-            except:
-                results[metric_key] = 0.0
-        return results
-    
-    def _evaluate_sklearn(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
-        """Evaluate sklearn model."""
-        if hasattr(self.model, 'predict'):
-            y_pred = self.model.predict(X)
-        else:
-            raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
-        results = {}
-        for metric in self.metrics:
-            metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
-            try:
-                results[metric_key] = metric(y, y_pred)
-            except:
-                results[metric_key] = 0.0
-        return results
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """Make predictions on given data."""
-        # Check if this is a PyTorch model or sklearn model
-        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
-            # PyTorch model prediction
-            return self._predict_torch(X)
-        else:
-            # sklearn model prediction
-            return self._predict_sklearn(X)
-    
-    def _predict_torch(self, X: np.ndarray) -> np.ndarray:
-        """Make predictions with PyTorch model."""
-        loader: DataLoader = self.prepare_data_internal(X, train=False)
-        self.model.eval()
-        all_preds = []
-        with torch.no_grad():
-            for batch in loader:
-                Xb = batch[0] if isinstance(batch, (list, tuple)) else batch
-                Xb = Xb.to(self.device)
-                outputs = self.model(Xb)
-                if self.task_type == "regression":
-                    outputs = outputs.squeeze()
-                all_preds.append(outputs.cpu())
-        return torch.cat(all_preds).numpy()
-    
-    def _predict_sklearn(self, X: np.ndarray) -> np.ndarray:
-        """Make predictions with sklearn model."""
-        if hasattr(self.model, 'predict'):
-            return self.model.predict(X)
-        else:
-            raise AttributeError(f"Model of type {type(self.model)} does not have a predict method.")
-
-    def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Predict class probabilities (classification only)."""
-        if self.task_type != "classification":
-            raise ValueError("predict_proba is only available for classification tasks")
-        
-        # Check if this is a PyTorch model or sklearn model
-        if hasattr(self, 'device') and hasattr(self.model, 'eval'):
-            # PyTorch model prediction
-            return self._predict_proba_torch(X)
-        else:
-            # sklearn model prediction
-            return self._predict_proba_sklearn(X)
-    
-    def _predict_proba_torch(self, X: np.ndarray) -> np.ndarray:
-        """Predict probabilities with PyTorch model."""
-        loader: DataLoader = self.prepare_data_internal(X, train=False)
-        self.model.eval()
-        all_probs = []
-        with torch.no_grad():
-            for batch in loader:
-                Xb = batch[0] if isinstance(batch, (list, tuple)) else batch
-                Xb = Xb.to(self.device)
-                outputs = self.model(Xb)
-                probs = torch.softmax(outputs, dim=1)
-                all_probs.append(probs.cpu())
-        return torch.cat(all_probs).numpy()
-    
-    def _predict_proba_sklearn(self, X: np.ndarray) -> np.ndarray:
-        """Predict probabilities with sklearn model."""
-        if hasattr(self.model, 'predict_proba'):
-            return self.model.predict_proba(X)
-        else:
-            raise ValueError('Model does not support predict_proba')
-
 
 class SimplePredictor(Evaluate):
     """
@@ -698,9 +672,14 @@ class GeneralPipeline(Evaluate):
         
         # Initialize mixed precision training
         if self.use_mixed_precision and device != "cpu":
-            from torch.cuda.amp import GradScaler, autocast
-            self.scaler = GradScaler()
-            self.autocast = autocast
+            device_str = str(device)
+            device_type = "cuda" if device_str.startswith("cuda") else None
+            if device_type is not None:
+                self.scaler = torch.amp.GradScaler(device_type=device_type)
+                self.autocast = partial(torch.amp.autocast, device_type=device_type)
+            else:
+                self.scaler = None
+                self.autocast = None
         else:
             self.scaler = None
             self.autocast = None
