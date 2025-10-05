@@ -3,23 +3,25 @@ import joblib
 import torch
 import pandas as pd
 import numpy as np
-try: 
+try:
     from .kaggle_utils import _running_on_kaggle
 except Exception:
     from kaggle_utils import _running_on_kaggle
+
 if _running_on_kaggle():
     RESULTS_DIR_OUT = "/kaggle/working/results"
     RESULTS_DIR_IN = "/kaggle/input"
-else: 
+    RESULTS_DIR = RESULTS_DIR_OUT
+else:
     RESULTS_DIR = "results"
-    os.makedirs(RESULTS_DIR, exist_ok=True)
+    RESULTS_DIR_OUT = RESULTS_DIR
+    RESULTS_DIR_IN = RESULTS_DIR
+
+os.makedirs(RESULTS_DIR_OUT, exist_ok=True)
 
 def save_model(model, model_name, path_start):
     if path_start is not None:
-        if _running_on_kaggle():
-            path_start = os.path.join(RESULTS_DIR_OUT, path_start)
-        else:
-            base_dir = os.path.join(RESULTS_DIR, path_start)
+        base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
     else:
         raise ValueError("path_start must be provided to save the model.")
     os.makedirs(base_dir, exist_ok=True)
@@ -35,16 +37,26 @@ def save_model(model, model_name, path_start):
 def load_model(model_class, model_name, params, path_start, augmentation=None):
     augmentation = augmentation or 'none'
     model_file = f"{model_name}_{augmentation}.pt"
-    if path_start is not None:
-        if _running_on_kaggle():
-            path_start = os.path.join(RESULTS_DIR_IN, path_start)
-            # If path_start is not found in input directory, fallback to working directory
-            if not os.path.exists(os.path.join(path_start, model_file)):
-                path_start = os.path.join(RESULTS_DIR_OUT, path_start)
-        else:
-            path = os.path.join(RESULTS_DIR_IN, path_start, model_file)
-    else:
+    if path_start is None:
         raise ValueError("path_start must be provided to load the model.")
+
+    candidate_dirs = []
+    if _running_on_kaggle():
+        candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
+        candidate_dirs.append(os.path.join(RESULTS_DIR_OUT, path_start))
+    else:
+        candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
+
+    path = None
+    for base_dir in candidate_dirs:
+        candidate_path = os.path.join(base_dir, model_file)
+        if os.path.exists(candidate_path):
+            path = candidate_path
+            break
+
+    if path is None:
+        # Fall back to the first candidate so the load call raises a clear error
+        path = os.path.join(candidate_dirs[0], model_file)
     model = model_class(**params)
     
     if hasattr(model, "load_state_dict"):
@@ -62,7 +74,7 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
 
 def save_metrics(metrics, model_name, phase, path_start):
     if path_start is not None:
-        base_dir = os.path.join(RESULTS_DIR, path_start)
+        base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
     else:
         raise ValueError("path_start must be provided to save metrics.")
     os.makedirs(base_dir, exist_ok=True)
@@ -110,4 +122,3 @@ def select_best_epoch(history, task_type='classification', metric=None):
             best_epoch = idx
 
     return best_epoch
-
