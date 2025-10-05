@@ -675,18 +675,20 @@ class GeneralPipeline(Evaluate):
         self.use_mixed_precision = use_mixed_precision
         
         # Initialize mixed precision training
+        self.scaler = None
+        self.autocast = None
         if self.use_mixed_precision and device != "cpu":
             device_str = str(device)
             device_type = "cuda" if device_str.startswith("cuda") else None
             if device_type is not None:
-                self.scaler = torch.amp.GradScaler(device_type=device_type)
-                self.autocast = partial(torch.amp.autocast, device_type=device_type)
-            else:
-                self.scaler = None
-                self.autocast = None
-        else:
-            self.scaler = None
-            self.autocast = None
+                try:
+                    self.scaler = torch.amp.GradScaler(device=device_type)
+                    self.autocast = partial(torch.amp.autocast, device_type=device_type)
+                except (TypeError, AttributeError):
+                    # Older PyTorch releases do not accept the device_type kwarg or torch.amp is missing
+                    if device_type == "cuda" and hasattr(torch, "cuda") and hasattr(torch.cuda, "amp"):
+                        self.scaler = torch.cuda.amp.GradScaler()
+                        self.autocast = torch.cuda.amp.autocast
         self.history = []
         self.train_losses = []
         self.val_losses = []
