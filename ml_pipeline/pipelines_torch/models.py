@@ -504,7 +504,7 @@ class HuggingFaceQLoRAWrapper:
     def __init__(self, model_name: str, tokenizer_name: Optional[str] = None, 
                  num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu',
                  lora_config: Optional[Dict[str, Any]] = None, quantization_config: Optional[Dict[str, Any]] = None):
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
         from peft import LoraConfig, get_peft_model, TaskType
         import torch
         
@@ -518,27 +518,66 @@ class HuggingFaceQLoRAWrapper:
         if task_type == 'regression':
             num_labels = 1
             
-        # Default quantization config (4-bit quantization)
-        if quantization_config is None:
-            torch_dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type='nf4',
-                bnb_4bit_compute_dtype=torch_dtype,
-                bnb_4bit_quant_storage=torch_dtype,
+        # Force GPU usage if available, raise error if not
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "GPU is required for HuggingFaceQLoRAWrapper but CUDA is not available. "
+                "Please ensure you have a CUDA-capable GPU and PyTorch with CUDA support installed."
             )
-        else:
-            quantization_config = BitsAndBytesConfig(**quantization_config)
+        
+        # Determine dtype based on GPU compute capability
+        try:
+            # Check compute capability for bfloat16 support (Ampere and newer = 8.0+)
+            compute_capability = torch.cuda.get_device_capability()[0]
+            torch_dtype = torch.bfloat16 if compute_capability >= 8 else torch.float16
+            print(f"Using GPU with compute capability {compute_capability}.x - dtype: {torch_dtype}")
+        except Exception:
+            # Default to float16 for older GPUs
+            torch_dtype = torch.float16
+            print(f"Using GPU with default dtype: {torch_dtype}")
             
-        # Load model with quantization
+        # Try to set up quantization config with proper error handling
+        bnb_config = None
+        if quantization_config is None:
+            try:
+                from transformers import BitsAndBytesConfig
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type='nf4',  # NF4 quantization (better than FP4 for many models)
+                    bnb_4bit_use_double_quant=True,  # Double quantization for additional memory savings
+                    bnb_4bit_compute_dtype=torch_dtype,
+                )
+                print("4-bit quantization enabled with NF4")
+            except Exception as e:
+                print(f"Warning: Failed to setup quantization config: {e}")
+                print("Falling back to non-quantized model loading on GPU.")
+                bnb_config = None
+        elif quantization_config is not None:
+            try:
+                from transformers import BitsAndBytesConfig
+                bnb_config = BitsAndBytesConfig(**quantization_config)
+                print("Custom quantization config applied")
+            except Exception as e:
+                print(f"Warning: Failed to setup custom quantization config: {e}")
+                print("Falling back to non-quantized model loading on GPU.")
+                bnb_config = None
+            
+        # Prepare model loading kwargs - always use GPU
+        model_kwargs = {
+            "num_labels": num_labels,
+            "torch_dtype": torch_dtype,
+            "low_cpu_mem_usage": True,
+            "device_map": "auto",  # Always use auto device mapping for GPU
+        }
+        
+        # Add quantization config if available
+        if bnb_config is not None:
+            model_kwargs["quantization_config"] = bnb_config
+        
+        # Load model with quantization or fallback
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_name, 
-            num_labels=num_labels,
-            quantization_config=quantization_config,
-            device_map="auto",
-            torch_dtype=torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16,
-            attn_implementation="eager"  # Use "flash_attention_2" for newer GPUs
+            model_name,
+            **model_kwargs
         )
         
         # Default LoRA config
@@ -596,6 +635,16 @@ class HuggingFaceQLoRAWrapper:
             
         dataset = Dataset.from_list(formatted_data)
         
+        # Determine dtype for training based on GPU capability
+        try:
+            compute_capability = torch.cuda.get_device_capability()[0]
+            use_bf16 = compute_capability >= 8
+            use_fp16 = compute_capability < 8
+        except Exception:
+            # Fallback for older GPUs
+            use_bf16 = False
+            use_fp16 = True
+        
         # Training configuration
         args = SFTConfig(
             output_dir=kwargs.get('output_dir', './qlora_results'),
@@ -608,8 +657,8 @@ class HuggingFaceQLoRAWrapper:
             optim="adamw_torch_fused",
             logging_steps=10,
             learning_rate=kwargs.get('learning_rate', 2e-4),
-            fp16=True if self.device == 'cuda' and torch.cuda.get_device_capability()[0] < 8 else False,
-            bf16=True if self.device == 'cuda' and torch.cuda.get_device_capability()[0] >= 8 else False,
+            fp16=use_fp16,
+            bf16=use_bf16,
             max_grad_norm=0.3,
             warmup_ratio=0.03,
             lr_scheduler_type="constant",
