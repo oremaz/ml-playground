@@ -580,6 +580,11 @@ class HuggingFaceQLoRAWrapper:
             **model_kwargs
         )
         
+        # Prepare model for k-bit training BEFORE applying LoRA if quantization is enabled
+        if bnb_config is not None:
+            from peft import prepare_model_for_kbit_training
+            self.model = prepare_model_for_kbit_training(self.model)
+        
         # Default LoRA config
         if lora_config is None:
             lora_config = {
@@ -592,9 +597,15 @@ class HuggingFaceQLoRAWrapper:
                 'modules_to_save': ["classifier"]  # Save classifier head
             }
         
-        # Apply LoRA
+        # Apply LoRA after preparing for k-bit training
         lora_cfg = LoraConfig(**lora_config)
         self.model = get_peft_model(self.model, lora_cfg)
+        
+        # Store whether quantization is enabled for use in fit()
+        self._is_quantized = bnb_config is not None
+        
+        # Store max sequence length for consistent train/predict behavior
+        self.max_seq_length = 512  # Default, can be overridden in fit()
         
     def to(self, device):
         self.device = device
@@ -606,34 +617,60 @@ class HuggingFaceQLoRAWrapper:
         Fine-tune the model using QLoRA.
         X: list of texts, y: labels/targets
         """
-        from transformers import TrainingArguments, Trainer
-        from trl import SFTTrainer, SFTConfig
+        from transformers import TrainingArguments, Trainer, DataCollatorWithPadding
         from datasets import Dataset
         import torch
+        import numpy as np
+        from sklearn.preprocessing import LabelEncoder
         
-        # Prepare dataset
-        if self.task_type == 'classification':
-            # For classification, format as conversation
-            def create_conversation(text, label):
-                return {
-                    "messages": [
-                        {"role": "user", "content": text},
-                        {"role": "assistant", "content": str(label)}
-                    ]
-                }
-            formatted_data = [create_conversation(text, label) for text, label in zip(X, y)]
-        else:
-            # For regression, similar format but with continuous values
-            def create_conversation(text, target):
-                return {
-                    "messages": [
-                        {"role": "user", "content": text},
-                        {"role": "assistant", "content": str(target)}
-                    ]
-                }
-            formatted_data = [create_conversation(text, target) for text, target in zip(X, y)]
+        # Convert labels to proper format - handle string labels
+        if isinstance(y, (list, np.ndarray)):
+            if hasattr(y, 'to_numpy'):
+                y = y.to_numpy()
+            y = np.array(y).flatten()
             
-        dataset = Dataset.from_list(formatted_data)
+            # Check if labels are strings and encode them
+            if y.dtype == object or isinstance(y[0], str):
+                label_encoder = LabelEncoder()
+                y = label_encoder.fit_transform(y)
+                # Store the encoder for later use in predict
+                self.label_encoder = label_encoder
+                print(f"Label encoding: {dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))}")
+            
+            y = y.astype(int).tolist()
+        elif hasattr(y, 'tolist'):
+            y = y.tolist()
+            # Check if labels are strings
+            if isinstance(y[0], str):
+                label_encoder = LabelEncoder()
+                y = label_encoder.fit_transform(y).tolist()
+                self.label_encoder = label_encoder
+                print(f"Label encoding: {dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))}")
+            # Flatten if nested
+            elif isinstance(y[0], (list, np.ndarray)):
+                y = [int(item[0] if isinstance(item, (list, np.ndarray)) else item) for item in y]
+        
+        # Prepare dataset for sequence classification (not conversation format)
+        dataset = Dataset.from_dict({'text': list(X), 'label': y})  # Use 'label' not 'labels' initially
+        
+        # Store max_seq_length for use in predict()
+        self.max_seq_length = kwargs.get('max_seq_length', 512)
+        
+        # Tokenize the dataset - DataCollatorWithPadding expects 'label' not 'labels'
+        def tokenize_fn(examples):
+            # Tokenize the text
+            tokenized = self.tokenizer(
+                examples['text'], 
+                truncation=True, 
+                padding=False,  # Don't pad here, let DataCollator handle it
+                max_length=self.max_seq_length
+            )
+            # Keep the label (DataCollator will rename to labels)
+            tokenized['label'] = examples['label']
+            return tokenized
+        
+        dataset = dataset.map(tokenize_fn, batched=True, remove_columns=['text'])
+        # Don't set format yet - let the data collator handle it
         
         # Determine dtype for training based on GPU capability
         try:
@@ -645,13 +682,18 @@ class HuggingFaceQLoRAWrapper:
             use_bf16 = False
             use_fp16 = True
         
-        # Training configuration
-        args = SFTConfig(
+        # Disable fp16/bf16 if using quantization to avoid gradient scaling issues
+        # Quantized models already use mixed precision internally
+        if self._is_quantized:
+            use_bf16 = False
+            use_fp16 = False
+        
+        # Training configuration - use standard TrainingArguments for sequence classification
+        training_args = TrainingArguments(
             output_dir=kwargs.get('output_dir', './qlora_results'),
-            packing=True,
             num_train_epochs=kwargs.get('epochs', 3),
             per_device_train_batch_size=kwargs.get('batch_size', 1),
-            gradient_accumulation_steps=kwargs.get('gradient_accumulation_steps', 4),
+            gradient_accumulation_steps=kwargs.get('gradient_accumulation_steps', 2),
             gradient_checkpointing=True,
             optim="adamw_torch_fused",
             logging_steps=10,
@@ -662,19 +704,23 @@ class HuggingFaceQLoRAWrapper:
             warmup_ratio=0.03,
             lr_scheduler_type="constant",
             report_to="none",
-            dataset_kwargs={
-                "add_special_tokens": False,
-                "append_concat_token": True,
-            }
+            save_strategy="no",  # Don't save checkpoints to save space
         )
         
-        # Create trainer
-        trainer = SFTTrainer(
+        # Create data collator for dynamic padding
+        data_collator = DataCollatorWithPadding(
+            tokenizer=self.tokenizer,
+            padding=True,
+            return_tensors='pt'
+        )
+        
+        # Create trainer with standard Trainer (not SFTTrainer)
+        trainer = Trainer(
             model=self.model,
-            args=args,
+            args=training_args,
             train_dataset=dataset,
-            processing_class=self.tokenizer,
-            max_seq_length=kwargs.get('max_seq_length', 512)
+            processing_class=self.tokenizer,  # Use processing_class instead of tokenizer
+            data_collator=data_collator,
         )
         
         # Train
@@ -695,7 +741,7 @@ class HuggingFaceQLoRAWrapper:
         with torch.no_grad():
             for text in X:
                 inputs = self.tokenizer(text, return_tensors='pt', truncation=True, 
-                                      padding='max_length', max_length=256).to(self.device)
+                                      padding='max_length', max_length=self.max_seq_length).to(self.device)
                 outputs = self.model(**inputs)
                 logits = outputs.logits
                 
@@ -706,6 +752,10 @@ class HuggingFaceQLoRAWrapper:
                     if pred.ndim == 0:  # scalar
                         pred = pred.item()
                 predictions.append(pred)
+        
+        # If we encoded labels during training, decode them back
+        if self.task_type == 'classification' and hasattr(self, 'label_encoder'):
+            predictions = self.label_encoder.inverse_transform(predictions)
                 
         return predictions
                 
@@ -720,7 +770,7 @@ class HuggingFaceQLoRAWrapper:
         with torch.no_grad():
             for text in X:
                 inputs = self.tokenizer(text, return_tensors='pt', truncation=True, 
-                                      padding='max_length', max_length=256).to(self.device)
+                                      padding='max_length', max_length=self.max_seq_length).to(self.device)
                 outputs = self.model(**inputs)
                 logits = outputs.logits
                 probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
@@ -739,14 +789,14 @@ class HuggingFaceQLoRAWrapper:
                 all_logits = []
                 for text in X:
                     inputs = self.tokenizer(text, return_tensors='pt', truncation=True,
-                                          padding='max_length', max_length=256).to(self.device)
+                                          padding='max_length', max_length=self.max_seq_length).to(self.device)
                     outputs = self.model(**inputs)
                     all_logits.append(outputs.logits)
                 return torch.cat(all_logits, dim=0)
             else:
                 # Single input
                 inputs = self.tokenizer(X, return_tensors='pt', truncation=True,
-                                      padding='max_length', max_length=256).to(self.device)
+                                      padding='max_length', max_length=self.max_seq_length).to(self.device)
                 outputs = self.model(**inputs)
                 return outputs.logits
 
@@ -1075,8 +1125,5 @@ REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
 MODEL_REGISTRY: Dict[str, Callable] = {
     **CLASSIFICATION_MODEL_REGISTRY,
     **REGRESSION_MODEL_REGISTRY,
-    # Legacy entries
-    "hf_lora": lambda **kwargs: HuggingFaceLoRAWrapper(task_type='classification', **kwargs),
-    "hf_qlora": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
 }
 
