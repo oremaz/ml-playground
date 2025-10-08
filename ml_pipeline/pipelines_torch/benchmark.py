@@ -152,7 +152,9 @@ class BenchmarkRunner:
                     optimizer_params["weight_decay"] = self.weight_decay
                 # Dynamically select pipeline type
                 from pipelines_torch.base import GeneralPipelineSklearn
-                is_torch_model = issubclass(model_class, torch.nn.Module)
+                # Some registry entries expose factories (e.g., lambdas) instead of raw classes,
+                # so we inspect the instantiated model rather than the constructor.
+                is_torch_model = isinstance(model, torch.nn.Module)
                 if is_torch_model:
                     pipeline = GeneralPipeline(
                         model=model,
@@ -220,4 +222,3 @@ class BenchmarkRunner:
             raise ValueError(f"Epochs must be a positive int for model '{model_name}', got {epochs}.")
 
         return epochs
-
