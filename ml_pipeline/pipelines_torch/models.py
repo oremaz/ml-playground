@@ -234,11 +234,17 @@ class LightGBMRegressorWrapper:
     def fit(self, X, y, *args, **kwargs):
         """
         Fits the model. Converts tensors to numpy arrays if necessary.
+        Handles 1D labels by reshaping them to 2D for MultiOutputRegressor.
         """
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
         if isinstance(y, torch.Tensor):
             y = y.cpu().numpy()
+        
+        # MultiOutputRegressor requires 2D labels (n_samples, n_outputs)
+        # If labels are 1D, reshape to 2D with shape (n_samples, 1)
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
         
         self.model.fit(X, y)
 
@@ -1025,21 +1031,3 @@ MODEL_REGISTRY: Dict[str, Callable] = {
     "hf_qlora": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
 }
 
-"""
-CLASSIFICATION_MODEL_REGISTRY keys:
-- 'mlp_classifier', 'deep_mlp_classifier', 'random_forest_classifier', 'xgboost_classifier'
-- 'hf_lora_classifier', 'hf_qlora_classifier', 'llama_cpp_classifier'
-
-REGRESSION_MODEL_REGISTRY keys:
-- 'mlp_regressor', 'deep_mlp_regressor', 'random_forest_regressor', 'xgboost_regressor'
-- 'hf_lora_regressor', 'hf_qlora_regressor', 'llama_cpp_regressor'
-
-MODEL_REGISTRY keys (combined for backward compatibility):
-- All keys from both registries plus legacy 'hf_lora' and 'hf_qlora'
-
-Notes:
-- 'hf_lora_*' and 'hf_qlora_*' require text input and HuggingFace/PEFT dependencies
-- 'xgboost_*' requires XGBoost to be installed
-- 'llama_cpp_*' requires llama-cpp-python to be installed
-- All models are compatible with GeneralPipeline, but some may require special handling
-"""
