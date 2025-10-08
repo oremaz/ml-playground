@@ -648,7 +648,6 @@ class HuggingFaceQLoRAWrapper:
         # Training configuration
         args = SFTConfig(
             output_dir=kwargs.get('output_dir', './qlora_results'),
-            max_seq_length=kwargs.get('max_seq_length', 512),
             packing=True,
             num_train_epochs=kwargs.get('epochs', 3),
             per_device_train_batch_size=kwargs.get('batch_size', 1),
@@ -674,7 +673,8 @@ class HuggingFaceQLoRAWrapper:
             model=self.model,
             args=args,
             train_dataset=dataset,
-            processing_class=self.tokenizer
+            processing_class=self.tokenizer,
+            max_seq_length=kwargs.get('max_seq_length', 512)
         )
         
         # Train
