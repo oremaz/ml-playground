@@ -115,9 +115,9 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
         adapter_config_path = os.path.join(found_path, 'adapter_config.json')
         if os.path.exists(adapter_config_path):
             # This is a PEFT model - load it specially
-            from peft import PeftModel, PeftConfig
+            from peft import PeftModel
             from transformers import AutoModelForSequenceClassification
-            import torch
+            import torch.nn as nn
             
             # Load metadata if available
             metadata_path = os.path.join(found_path, 'wrapper_metadata.json')
@@ -127,9 +127,14 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
                     metadata = json.load(f)
                 print(f"Loaded metadata: {metadata}")
             
-            # Load PEFT config to get base model name
-            peft_config = PeftConfig.from_pretrained(found_path)
-            base_model_name = peft_config.base_model_name_or_path
+            # Load adapter config manually to get base model name
+            # Don't use PeftConfig.from_pretrained as it may have version incompatibilities
+            with open(adapter_config_path, 'r') as f:
+                adapter_config = json.load(f)
+            
+            base_model_name = adapter_config.get('base_model_name_or_path')
+            if not base_model_name:
+                raise ValueError(f"Could not find base_model_name_or_path in {adapter_config_path}")
             
             print(f"Loading base model: {base_model_name}")
             
@@ -184,25 +189,25 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
             
         else:
             raise FileNotFoundError(f"adapter_config.json not found in {found_path}")
-        
-    elif hasattr(model_class, "__bases__") and any(
-        base.__name__ == "Module" for base in model_class.__mro__
-    ):
-        # PyTorch model
-        model = model_class(**params)
-        if torch.cuda.is_available():
-            state_dict = torch.load(found_path)
-        else:
-            state_dict = torch.load(found_path, map_location=torch.device('cpu'))
-        model.load_state_dict(state_dict)
-        print(f"✓ PyTorch model loaded from {found_path}")
-        
+    
     else:
-        # Sklearn model or other wrapper
+        # Non-directory models (PyTorch .pt files or sklearn models)
         model = model_class(**params)
-        if hasattr(model, "model"):
+        
+        if hasattr(model, "load_state_dict"):
+            # PyTorch model with state_dict
+            if torch.cuda.is_available():
+                state_dict = torch.load(found_path)
+            else:
+                state_dict = torch.load(found_path, map_location=torch.device('cpu'))
+            model.load_state_dict(state_dict)
+            print(f"✓ PyTorch model loaded from {found_path}")
+            
+        elif hasattr(model, "model"):
+            # Sklearn model wrapped in a class
             model.model = joblib.load(found_path)
             print(f"✓ Sklearn model loaded from {found_path}")
+            
         else:
             raise ValueError(f"Don't know how to load model of type {type(model)}")
     
