@@ -1089,6 +1089,40 @@ class GeneralPipeline(Evaluate):
             For backward compatibility with save_metrics, always returns training history.
             Access CV results via get_cv_scores() method if needed.
         """
+        # Check if the model has a custom fit method (e.g., HuggingFace models)
+        # We detect this by checking if the model's fit method is NOT the one from nn.Module
+        has_custom_fit = (
+            hasattr(self.model, 'fit') and 
+            callable(getattr(self.model, 'fit')) and
+            # Make sure it's not just the inherited fit method
+            type(self.model).fit != torch.nn.Module.fit if hasattr(torch.nn.Module, 'fit') else True
+        )
+        
+        if has_custom_fit:
+            # For models with custom fit methods (like HuggingFace wrappers),
+            # delegate training to the model itself
+            print("Using model's custom training method")
+            
+            # Pass through relevant training parameters
+            fit_kwargs = {
+                'epochs': self.epochs,
+                'batch_size': self.batch_size,
+                'learning_rate': self.optimizer.param_groups[0]['lr'] if hasattr(self, 'optimizer') else 1e-4,
+            }
+            
+            # Call the model's fit method
+            training_history = self.model.fit(X, y, **fit_kwargs)
+            
+            # Store the history
+            if isinstance(training_history, list):
+                self.history = training_history
+            else:
+                # If the model doesn't return history, create a minimal one
+                self.history = [{'loss': 0.0}]
+            
+            return self.history
+        
+        # Standard PyTorch training loop for regular nn.Module models
         if self.use_kfold:
             print(f"Starting {self.k_folds}-fold cross-validation with weight averaging ensemble")
             results = self._kfold_fit(X, y)

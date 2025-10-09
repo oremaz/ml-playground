@@ -25,14 +25,33 @@ def save_model(model, model_name, path_start):
     else:
         raise ValueError("path_start must be provided to save the model.")
     os.makedirs(base_dir, exist_ok=True)
-    path = os.path.join(base_dir, f"{model_name}.pt")
-    if hasattr(model, "state_dict"):
+    
+    # Priority order for saving:
+    # 1. HuggingFace models with save_pretrained (PEFT/LoRA models)
+    # 2. PyTorch models with state_dict
+    # 3. Sklearn models via joblib
+    
+    if hasattr(model, "save_pretrained"):
+        # HuggingFace models (including PEFT/LoRA wrapped models)
+        save_dir = os.path.join(base_dir, model_name)
+        os.makedirs(save_dir, exist_ok=True)
+        model.save_pretrained(save_dir)
+        # Also save tokenizer if available
+        if hasattr(model, "tokenizer"):
+            model.tokenizer.save_pretrained(save_dir)
+        print(f"Model saved to {save_dir}")
+    elif hasattr(model, "state_dict"):
+        # PyTorch models
+        path = os.path.join(base_dir, f"{model_name}.pt")
         torch.save(model.state_dict(), path)
+        print(f"Model state dict saved to {path}")
     elif hasattr(model, "model"):
+        # Sklearn models wrapped in a class
+        path = os.path.join(base_dir, f"{model_name}.pt")
         joblib.dump(model.model, path)
-    elif hasattr(model, "save_pretrained"):
-        model.save_pretrained(os.path.join(base_dir, model_name))
-    # Add more logic for LLMs if needed
+        print(f"Model saved to {path}")
+    else:
+        print(f"Warning: Could not determine how to save model of type {type(model)}")
 
 def load_model(model_class, model_name, params, path_start, augmentation=None):
     augmentation = augmentation or 'none'

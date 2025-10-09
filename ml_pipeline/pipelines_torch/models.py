@@ -294,15 +294,19 @@ class SklearnRandomForestRegressorWrapper:
         return torch.tensor(preds, dtype=torch.float32)
 
 # --- LoRA/PEFT HuggingFace Wrapper ---
-class HuggingFaceLoRAWrapper:
+class HuggingFaceLoRAWrapper(nn.Module):
     """
     Wrapper for any HuggingFace model with LoRA/PEFT fine-tuning.
     Supports both classification and regression tasks.
     Accepts model_name, tokenizer_name, and LoRA config.
     Note: Input must be tokenized text.
+    
+    Note: This wrapper inherits from nn.Module to be compatible with GeneralPipeline,
+    but training is handled by HuggingFace Trainer, not by the standard PyTorch training loop.
     """
     def __init__(self, model_name: str, tokenizer_name: Optional[str] = None, lora_config: Optional[Dict[str, Any]] = None, 
                  num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu'):
+        super().__init__()  # Initialize nn.Module
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         from peft import LoraConfig, get_peft_model, TaskType
         
@@ -332,10 +336,28 @@ class HuggingFaceLoRAWrapper:
         self.device = device
         self.model.to(device)
         return self
+    
+    def save_pretrained(self, save_directory: str):
+        """
+        Save the PEFT model and tokenizer to a directory.
+        """
+        import os
+        os.makedirs(save_directory, exist_ok=True)
+        self.model.save_pretrained(save_directory)
+        self.tokenizer.save_pretrained(save_directory)
+        import json
+        metadata = {'task_type': self.task_type}
+        with open(os.path.join(save_directory, 'wrapper_metadata.json'), 'w') as f:
+            json.dump(metadata, f)
+        print(f"PEFT model, tokenizer, and metadata saved to {save_directory}")
         
     def fit(self, X, y, *args, **kwargs):
-        # X: list of texts, y: labels/targets
-        from transformers import TrainingArguments, Trainer
+        """
+        Fine-tune the model using LoRA.
+        X: list of texts, y: labels/targets
+        Returns: training_history (list of dicts with metrics per epoch)
+        """
+        from transformers import TrainingArguments, Trainer, TrainerCallback
         import torch
         from datasets import Dataset
         ds = Dataset.from_dict({'text': X, 'labels': y})
@@ -343,22 +365,42 @@ class HuggingFaceLoRAWrapper:
             return self.tokenizer(batch['text'], truncation=True, padding='max_length', max_length=256)
         ds = ds.map(tokenize_fn, batched=True)
         ds.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+        
+        num_epochs = kwargs.get('epochs', 2)
         training_args = TrainingArguments(
             output_dir='./results',
-            num_train_epochs=kwargs.get('epochs', 2),
+            num_train_epochs=num_epochs,
             per_device_train_batch_size=kwargs.get('batch_size', 8),
             logging_steps=10,
             report_to='none',
             fp16=True if self.device == 'cuda' else False
         )
+        
+        # Track training history
+        training_history = []
+        
+        class MetricsCallback(TrainerCallback):
+            def on_epoch_end(self, args, state, control, **callback_kwargs):
+                if state.log_history:
+                    latest_log = state.log_history[-1]
+                    epoch_metrics = {
+                        'epoch': state.epoch,
+                        'loss': latest_log.get('loss', 0.0),
+                    }
+                    training_history.append(epoch_metrics)
+                    print(f"Epoch {int(state.epoch)}/{num_epochs} - Loss: {epoch_metrics['loss']:.4f}")
+        
         trainer = Trainer(
             model=self.model,
             args=training_args,
             train_dataset=ds,
             eval_dataset=None,
-            tokenizer=self.tokenizer
+            tokenizer=self.tokenizer,
+            callbacks=[MetricsCallback()],
         )
         trainer.train()
+        
+        return training_history
         
     def eval(self):
         self.model.eval()
@@ -398,6 +440,16 @@ class HuggingFaceLoRAWrapper:
             outputs = self.model(**inputs)
             logits = outputs.logits
         return logits
+    
+    def forward(self, x):
+        """
+        Forward pass for nn.Module compatibility.
+        Note: This is not typically used for text models. Use the fit/predict methods instead.
+        """
+        raise NotImplementedError(
+            "HuggingFaceLoRAWrapper uses HuggingFace Trainer for training. "
+            "Use the fit() method for training and predict()/predict_proba() for inference."
+        )
 
 class LlamaCppClassifier:
     """
@@ -495,15 +547,19 @@ class LlamaCppClassifier:
                 probs.append(prob)
         return probs
 
-class HuggingFaceQLoRAWrapper:
+class HuggingFaceQLoRAWrapper(nn.Module):
     """
     Wrapper for QLoRA (Quantized LoRA) fine-tuning with HuggingFace models.
     Supports both classification and regression tasks.
     Based on the guidelines from https://ai.google.dev/gemma/docs/core/huggingface_text_finetune_qlora
+    
+    Note: This wrapper inherits from nn.Module to be compatible with GeneralPipeline,
+    but training is handled by HuggingFace Trainer, not by the standard PyTorch training loop.
     """
     def __init__(self, model_name: str, tokenizer_name: Optional[str] = None, 
                  num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu',
                  lora_config: Optional[Dict[str, Any]] = None, quantization_config: Optional[Dict[str, Any]] = None):
+        super().__init__()  # Initialize nn.Module
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         from peft import LoraConfig, get_peft_model, TaskType
         import torch
@@ -611,13 +667,38 @@ class HuggingFaceQLoRAWrapper:
         self.device = device
         # Model is already on device due to device_map="auto"
         return self
+    
+    def save_pretrained(self, save_directory: str):
+        """
+        Save the PEFT model and tokenizer to a directory.
+        This allows the model to be reloaded later.
+        """
+        import os
+        os.makedirs(save_directory, exist_ok=True)
+        # Save the PEFT adapter weights
+        self.model.save_pretrained(save_directory)
+        # Save the tokenizer
+        self.tokenizer.save_pretrained(save_directory)
+        # Save additional metadata
+        import json
+        metadata = {
+            'task_type': self.task_type,
+            'max_seq_length': getattr(self, 'max_seq_length', 512),
+        }
+        # Save label encoder if it exists
+        if hasattr(self, 'label_encoder'):
+            metadata['label_classes'] = self.label_encoder.classes_.tolist()
+        with open(os.path.join(save_directory, 'wrapper_metadata.json'), 'w') as f:
+            json.dump(metadata, f)
+        print(f"PEFT model, tokenizer, and metadata saved to {save_directory}")
         
     def fit(self, X, y, *args, **kwargs):
         """
         Fine-tune the model using QLoRA.
         X: list of texts, y: labels/targets
+        Returns: training_history (list of dicts with metrics per epoch)
         """
-        from transformers import TrainingArguments, Trainer, DataCollatorWithPadding
+        from transformers import TrainingArguments, Trainer, DataCollatorWithPadding, TrainerCallback
         from datasets import Dataset
         import torch
         import numpy as np
@@ -689,9 +770,10 @@ class HuggingFaceQLoRAWrapper:
             use_fp16 = False
         
         # Training configuration - use standard TrainingArguments for sequence classification
+        num_epochs = kwargs.get('epochs', 3)
         training_args = TrainingArguments(
             output_dir=kwargs.get('output_dir', './qlora_results'),
-            num_train_epochs=kwargs.get('epochs', 3),
+            num_train_epochs=num_epochs,
             per_device_train_batch_size=kwargs.get('batch_size', 1),
             gradient_accumulation_steps=kwargs.get('gradient_accumulation_steps', 2),
             gradient_checkpointing=True,
@@ -714,6 +796,21 @@ class HuggingFaceQLoRAWrapper:
             return_tensors='pt'
         )
         
+        # Create a custom callback to track training history
+        training_history = []
+        
+        class MetricsCallback(TrainerCallback):
+            def on_epoch_end(self, args, state, control, **callback_kwargs):
+                # Get the latest log entry (contains loss)
+                if state.log_history:
+                    latest_log = state.log_history[-1]
+                    epoch_metrics = {
+                        'epoch': state.epoch,
+                        'loss': latest_log.get('loss', 0.0),
+                    }
+                    training_history.append(epoch_metrics)
+                    print(f"Epoch {int(state.epoch)}/{num_epochs} - Loss: {epoch_metrics['loss']:.4f}")
+        
         # Create trainer with standard Trainer (not SFTTrainer)
         trainer = Trainer(
             model=self.model,
@@ -721,10 +818,14 @@ class HuggingFaceQLoRAWrapper:
             train_dataset=dataset,
             processing_class=self.tokenizer,  # Use processing_class instead of tokenizer
             data_collator=data_collator,
+            callbacks=[MetricsCallback()],
         )
         
         # Train
         trainer.train()
+        
+        # Return training history for compatibility with benchmark runner
+        return training_history
         
     def eval(self):
         self.model.eval()
@@ -779,7 +880,10 @@ class HuggingFaceQLoRAWrapper:
         return probabilities
         
     def __call__(self, X):
-        """Returns raw logits."""
+        """
+        Returns raw logits for compatibility with pipeline evaluation.
+        Handles both single text inputs and lists of texts.
+        """
         import torch
         self.model.eval()
 
@@ -789,16 +893,29 @@ class HuggingFaceQLoRAWrapper:
                 all_logits = []
                 for text in X:
                     inputs = self.tokenizer(text, return_tensors='pt', truncation=True,
-                                          padding='max_length', max_length=self.max_seq_length).to(self.device)
+                                            padding='max_length', max_length=self.max_seq_length).to(self.device)
                     outputs = self.model(**inputs)
                     all_logits.append(outputs.logits)
                 return torch.cat(all_logits, dim=0)
             else:
                 # Single input
                 inputs = self.tokenizer(X, return_tensors='pt', truncation=True,
-                                      padding='max_length', max_length=self.max_seq_length).to(self.device)
+                                        padding='max_length', max_length=self.max_seq_length).to(self.device)
                 outputs = self.model(**inputs)
                 return outputs.logits
+    
+    def forward(self, x):
+        """
+        Forward pass for nn.Module compatibility.
+        Note: This is not typically used for text models. Use the fit/predict methods instead.
+        For compatibility with GeneralPipeline, this method is provided but should not be called directly.
+        """
+        # This method exists for nn.Module compatibility but isn't used in practice
+        # The actual forward pass happens through the HuggingFace model via fit/predict
+        raise NotImplementedError(
+            "HuggingFaceQLoRAWrapper uses HuggingFace Trainer for training. "
+            "Use the fit() method for training and predict()/predict_proba() for inference."
+        )
 
 
 class ThirdPartyTabularModel(nn.Module):
