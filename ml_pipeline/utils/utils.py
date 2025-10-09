@@ -71,7 +71,6 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
         candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
         candidate_dirs.append(os.path.join(RESULTS_DIR_OUT, path_start))
     else:
-        candidate_dirs.append(os.path.join(RESULTS_DIR_OUT, path_start))
         candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
 
     # Try to find the model directory or file
@@ -86,14 +85,11 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
         candidate_dir = os.path.join(base_dir, model_dir_name)
         if os.path.isdir(candidate_dir):
             # Check if it contains HuggingFace model files
-            try:
-                dir_contents = os.listdir(candidate_dir)
-                if any(f in dir_contents for f in ['adapter_config.json', 'adapter_model.safetensors', 'config.json', 'pytorch_model.bin', 'model.safetensors']):
-                    found_path = candidate_dir
-                    is_directory = True
-                    break
-            except Exception:
-                continue
+            dir_contents = os.listdir(candidate_dir)
+            if any(f in dir_contents for f in ['adapter_config.json', 'adapter_model.safetensors', 'config.json']):
+                found_path = candidate_dir
+                is_directory = True
+                break
         
         # Then check for .pt file (PyTorch/sklearn format)
         candidate_file = os.path.join(base_dir, model_file_name)
@@ -109,20 +105,73 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
     
     print(f"Loading model from: {found_path}")
     
-    # Instantiate the model
-    model = model_class(**params)
-    
     # Load based on model type
     if is_directory:
-        # HuggingFace model with PEFT/LoRA
+        # HuggingFace model with PEFT/LoRA - Don't instantiate the wrapper normally
         import json
+        from transformers import AutoTokenizer
         
-        # Load metadata if available
-        metadata_path = os.path.join(found_path, 'wrapper_metadata.json')
-        if os.path.exists(metadata_path):
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
-            print(f"Loaded metadata: {metadata}")
+        # Check if this is a HuggingFace PEFT model
+        adapter_config_path = os.path.join(found_path, 'adapter_config.json')
+        if os.path.exists(adapter_config_path):
+            # This is a PEFT model - load it specially
+            from peft import PeftModel, PeftConfig
+            from transformers import AutoModelForSequenceClassification
+            import torch
+            
+            # Load metadata if available
+            metadata_path = os.path.join(found_path, 'wrapper_metadata.json')
+            metadata = {}
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                print(f"Loaded metadata: {metadata}")
+            
+            # Load PEFT config to get base model name
+            peft_config = PeftConfig.from_pretrained(found_path)
+            base_model_name = peft_config.base_model_name_or_path
+            
+            print(f"Loading base model: {base_model_name}")
+            
+            # Determine task type and num_labels
+            task_type = metadata.get('task_type', params.get('task_type', 'classification'))
+            num_labels = params.get('num_labels', 2)
+            
+            # Determine dtype based on GPU availability
+            if torch.cuda.is_available():
+                try:
+                    compute_capability = torch.cuda.get_device_capability()[0]
+                    torch_dtype = torch.bfloat16 if compute_capability >= 8 else torch.float16
+                except Exception:
+                    torch_dtype = torch.float16
+            else:
+                torch_dtype = torch.float32
+            
+            # Load base model WITHOUT quantization (inference only)
+            base_model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_name,
+                num_labels=num_labels,
+                torch_dtype=torch_dtype,
+                device_map="auto" if torch.cuda.is_available() else None,
+                low_cpu_mem_usage=True,
+            )
+            
+            # Load PEFT adapters
+            model_with_adapters = PeftModel.from_pretrained(base_model, found_path)
+            print("✓ PEFT adapters loaded")
+            
+            # Now create the wrapper with the loaded model
+            # Don't use the normal __init__ which would create a new model
+            model = object.__new__(model_class)  # Create instance without calling __init__
+            nn.Module.__init__(model)  # Initialize nn.Module part
+            
+            # Set attributes manually
+            model.model = model_with_adapters
+            model.tokenizer = AutoTokenizer.from_pretrained(found_path)
+            model.task_type = task_type
+            model.device = params.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
+            model.max_seq_length = metadata.get('max_seq_length', 512)
+            model._is_quantized = False  # Loaded model is not quantized
             
             # Restore label encoder if available
             if 'label_classes' in metadata:
@@ -131,69 +180,16 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
                 model.label_encoder.classes_ = np.array(metadata['label_classes'])
                 print(f"Restored label encoder with classes: {metadata['label_classes']}")
             
-            # Restore max_seq_length
-            if 'max_seq_length' in metadata:
-                model.max_seq_length = metadata['max_seq_length']
-                print(f"Restored max_seq_length: {model.max_seq_length}")
-        
-        # Load tokenizer
-        if hasattr(model, 'tokenizer'):
-            from transformers import AutoTokenizer
-            model.tokenizer = AutoTokenizer.from_pretrained(found_path)
-            print("✓ Tokenizer loaded")
-        
-        # Load PEFT model
-        if hasattr(model, 'model'):
-            from peft import PeftModel
-            from transformers import AutoModelForSequenceClassification
+            print(f"✓ HuggingFace PEFT model loaded from {found_path}")
             
-            # Get adapter config to find base model
-            adapter_config_path = os.path.join(found_path, 'adapter_config.json')
-            if os.path.exists(adapter_config_path):
-                with open(adapter_config_path, 'r') as f:
-                    adapter_config = json.load(f)
-                base_model_name = adapter_config.get('base_model_name_or_path')
-                
-                if base_model_name:
-                    print(f"Loading base model: {base_model_name}")
-                    # Determine if it's classification or regression
-                    task_type = getattr(model, 'task_type', 'classification')
-                    num_labels = params.get('num_labels', 2)
-                    
-                    # Determine dtype and device based on availability
-                    device_map = "auto" if torch.cuda.is_available() else None
-                    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-                    
-                    # Load base model
-                    try:
-                        base_model = AutoModelForSequenceClassification.from_pretrained(
-                            base_model_name,
-                            num_labels=num_labels,
-                            torch_dtype=torch_dtype,
-                            device_map=device_map,
-                            low_cpu_mem_usage=True,
-                        )
-                        print("✓ Base model loaded")
-                    except Exception as e:
-                        print(f"Warning: Failed to load with quantization, trying without: {e}")
-                        base_model = AutoModelForSequenceClassification.from_pretrained(
-                            base_model_name,
-                            num_labels=num_labels,
-                        )
-                    
-                    # Load PEFT adapters
-                    model.model = PeftModel.from_pretrained(base_model, found_path)
-                    model.model.eval()
-                    print("✓ PEFT adapters loaded")
-                else:
-                    raise ValueError(f"Could not find base_model_name_or_path in {adapter_config_path}")
-            else:
-                raise FileNotFoundError(f"adapter_config.json not found in {found_path}")
+        else:
+            raise FileNotFoundError(f"adapter_config.json not found in {found_path}")
         
-        print(f"✓ HuggingFace PEFT model loaded successfully from {found_path}")
-        
-    elif hasattr(model, "load_state_dict"):
+    elif hasattr(model_class, "__bases__") and any(
+        base.__name__ == "Module" for base in model_class.__mro__
+    ):
         # PyTorch model
+        model = model_class(**params)
         if torch.cuda.is_available():
             state_dict = torch.load(found_path)
         else:
@@ -201,15 +197,17 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
         model.load_state_dict(state_dict)
         print(f"✓ PyTorch model loaded from {found_path}")
         
-    elif hasattr(model, "model"):
-        # Sklearn model
-        model.model = joblib.load(found_path)
-        print(f"✓ Sklearn model loaded from {found_path}")
-        
     else:
-        raise ValueError(f"Don't know how to load model of type {type(model)}")
+        # Sklearn model or other wrapper
+        model = model_class(**params)
+        if hasattr(model, "model"):
+            model.model = joblib.load(found_path)
+            print(f"✓ Sklearn model loaded from {found_path}")
+        else:
+            raise ValueError(f"Don't know how to load model of type {type(model)}")
     
     return model
+
 
 def save_metrics(metrics, model_name, phase, path_start):
     if path_start is not None:
