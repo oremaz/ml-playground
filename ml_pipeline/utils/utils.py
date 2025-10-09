@@ -54,8 +54,15 @@ def save_model(model, model_name, path_start):
         print(f"Warning: Could not determine how to save model of type {type(model)}")
 
 def load_model(model_class, model_name, params, path_start, augmentation=None):
+    """
+    Load a trained model from disk.
+    
+    Supports:
+    - HuggingFace models with PEFT/LoRA adapters (saved via save_pretrained)
+    - PyTorch models (saved via state_dict)
+    - Sklearn models (saved via joblib)
+    """
     augmentation = augmentation or 'none'
-    model_file = f"{model_name}_{augmentation}.pt"
     if path_start is None:
         raise ValueError("path_start must be provided to load the model.")
 
@@ -64,31 +71,144 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
         candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
         candidate_dirs.append(os.path.join(RESULTS_DIR_OUT, path_start))
     else:
+        candidate_dirs.append(os.path.join(RESULTS_DIR_OUT, path_start))
         candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
 
-    path = None
+    # Try to find the model directory or file
+    model_dir_name = f"{model_name}_{augmentation}"
+    model_file_name = f"{model_name}_{augmentation}.pt"
+    
+    found_path = None
+    is_directory = False
+    
     for base_dir in candidate_dirs:
-        candidate_path = os.path.join(base_dir, model_file)
-        if os.path.exists(candidate_path):
-            path = candidate_path
+        # First, check if it's a directory (HuggingFace format)
+        candidate_dir = os.path.join(base_dir, model_dir_name)
+        if os.path.isdir(candidate_dir):
+            # Check if it contains HuggingFace model files
+            try:
+                dir_contents = os.listdir(candidate_dir)
+                if any(f in dir_contents for f in ['adapter_config.json', 'adapter_model.safetensors', 'config.json', 'pytorch_model.bin', 'model.safetensors']):
+                    found_path = candidate_dir
+                    is_directory = True
+                    break
+            except Exception:
+                continue
+        
+        # Then check for .pt file (PyTorch/sklearn format)
+        candidate_file = os.path.join(base_dir, model_file_name)
+        if os.path.exists(candidate_file):
+            found_path = candidate_file
+            is_directory = False
             break
 
-    if path is None:
-        # Fall back to the first candidate so the load call raises a clear error
-        path = os.path.join(candidate_dirs[0], model_file)
+    if found_path is None:
+        raise FileNotFoundError(
+            f"Could not find model '{model_name}_{augmentation}' in any of the candidate directories: {candidate_dirs}"
+        )
+    
+    print(f"Loading model from: {found_path}")
+    
+    # Instantiate the model
     model = model_class(**params)
     
-    if hasattr(model, "load_state_dict"):
-        # Only use map_location if CUDA is not available
+    # Load based on model type
+    if is_directory:
+        # HuggingFace model with PEFT/LoRA
+        import json
+        
+        # Load metadata if available
+        metadata_path = os.path.join(found_path, 'wrapper_metadata.json')
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            print(f"Loaded metadata: {metadata}")
+            
+            # Restore label encoder if available
+            if 'label_classes' in metadata:
+                from sklearn.preprocessing import LabelEncoder
+                model.label_encoder = LabelEncoder()
+                model.label_encoder.classes_ = np.array(metadata['label_classes'])
+                print(f"Restored label encoder with classes: {metadata['label_classes']}")
+            
+            # Restore max_seq_length
+            if 'max_seq_length' in metadata:
+                model.max_seq_length = metadata['max_seq_length']
+                print(f"Restored max_seq_length: {model.max_seq_length}")
+        
+        # Load tokenizer
+        if hasattr(model, 'tokenizer'):
+            from transformers import AutoTokenizer
+            model.tokenizer = AutoTokenizer.from_pretrained(found_path)
+            print("✓ Tokenizer loaded")
+        
+        # Load PEFT model
+        if hasattr(model, 'model'):
+            from peft import PeftModel
+            from transformers import AutoModelForSequenceClassification
+            
+            # Get adapter config to find base model
+            adapter_config_path = os.path.join(found_path, 'adapter_config.json')
+            if os.path.exists(adapter_config_path):
+                with open(adapter_config_path, 'r') as f:
+                    adapter_config = json.load(f)
+                base_model_name = adapter_config.get('base_model_name_or_path')
+                
+                if base_model_name:
+                    print(f"Loading base model: {base_model_name}")
+                    # Determine if it's classification or regression
+                    task_type = getattr(model, 'task_type', 'classification')
+                    num_labels = params.get('num_labels', 2)
+                    
+                    # Determine dtype and device based on availability
+                    device_map = "auto" if torch.cuda.is_available() else None
+                    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+                    
+                    # Load base model
+                    try:
+                        base_model = AutoModelForSequenceClassification.from_pretrained(
+                            base_model_name,
+                            num_labels=num_labels,
+                            torch_dtype=torch_dtype,
+                            device_map=device_map,
+                            low_cpu_mem_usage=True,
+                        )
+                        print("✓ Base model loaded")
+                    except Exception as e:
+                        print(f"Warning: Failed to load with quantization, trying without: {e}")
+                        base_model = AutoModelForSequenceClassification.from_pretrained(
+                            base_model_name,
+                            num_labels=num_labels,
+                        )
+                    
+                    # Load PEFT adapters
+                    model.model = PeftModel.from_pretrained(base_model, found_path)
+                    model.model.eval()
+                    print("✓ PEFT adapters loaded")
+                else:
+                    raise ValueError(f"Could not find base_model_name_or_path in {adapter_config_path}")
+            else:
+                raise FileNotFoundError(f"adapter_config.json not found in {found_path}")
+        
+        print(f"✓ HuggingFace PEFT model loaded successfully from {found_path}")
+        
+    elif hasattr(model, "load_state_dict"):
+        # PyTorch model
         if torch.cuda.is_available():
-            state_dict = torch.load(path)
+            state_dict = torch.load(found_path)
         else:
-            state_dict = torch.load(path, map_location=torch.device('cpu'))
+            state_dict = torch.load(found_path, map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
+        print(f"✓ PyTorch model loaded from {found_path}")
+        
     elif hasattr(model, "model"):
-        model.model = joblib.load(path)
-    elif hasattr(model, "from_pretrained"):
-        model = model_class.from_pretrained(os.path.join(RESULTS_DIR, model_name))
+        # Sklearn model
+        model.model = joblib.load(found_path)
+        print(f"✓ Sklearn model loaded from {found_path}")
+        
+    else:
+        raise ValueError(f"Don't know how to load model of type {type(model)}")
+    
     return model
 
 def save_metrics(metrics, model_name, phase, path_start):

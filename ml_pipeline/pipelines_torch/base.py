@@ -1090,12 +1090,12 @@ class GeneralPipeline(Evaluate):
             Access CV results via get_cv_scores() method if needed.
         """
         # Check if the model has a custom fit method (e.g., HuggingFace models)
-        # We detect this by checking if the model's fit method is NOT the one from nn.Module
+        # We detect this by checking if the model's class directly defines a fit method
+        # (not inherited from nn.Module, which doesn't have fit)
+        model_class = type(self.model)
         has_custom_fit = (
-            hasattr(self.model, 'fit') and 
-            callable(getattr(self.model, 'fit')) and
-            # Make sure it's not just the inherited fit method
-            type(self.model).fit != torch.nn.Module.fit if hasattr(torch.nn.Module, 'fit') else True
+            'fit' in model_class.__dict__ and 
+            callable(getattr(self.model, 'fit'))
         )
         
         if has_custom_fit:
