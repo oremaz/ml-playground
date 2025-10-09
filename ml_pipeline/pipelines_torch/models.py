@@ -293,164 +293,6 @@ class SklearnRandomForestRegressorWrapper:
         preds = self.model.predict(X)
         return torch.tensor(preds, dtype=torch.float32)
 
-# --- LoRA/PEFT HuggingFace Wrapper ---
-class HuggingFaceLoRAWrapper(nn.Module):
-    """
-    Wrapper for any HuggingFace model with LoRA/PEFT fine-tuning.
-    Supports both classification and regression tasks.
-    Accepts model_name, tokenizer_name, and LoRA config.
-    Note: Input must be tokenized text.
-    
-    Note: This wrapper inherits from nn.Module to be compatible with GeneralPipeline,
-    but training is handled by HuggingFace Trainer, not by the standard PyTorch training loop.
-    """
-    def __init__(self, model_name: str, tokenizer_name: Optional[str] = None, lora_config: Optional[Dict[str, Any]] = None, 
-                 num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu'):
-        super().__init__()  # Initialize nn.Module
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
-        from peft import LoraConfig, get_peft_model, TaskType
-        
-        self.task_type = task_type
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name or model_name)
-        
-        if task_type == 'regression':
-            num_labels = 1
-            
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
-        
-        if lora_config is None:
-            lora_config = {
-                'r': 8,
-                'lora_alpha': 16,
-                'target_modules': ["q_proj", "v_proj"],
-                'lora_dropout': 0.05,
-                'bias': "none",
-                'task_type': TaskType.SEQ_CLS
-            }
-        lora_cfg = LoraConfig(**lora_config)
-        self.model = get_peft_model(self.model, lora_cfg)
-        self.device = device
-        self.model.to(device)
-        
-    def to(self, device):
-        self.device = device
-        self.model.to(device)
-        return self
-    
-    def save_pretrained(self, save_directory: str):
-        """
-        Save the PEFT model and tokenizer to a directory.
-        """
-        import os
-        os.makedirs(save_directory, exist_ok=True)
-        self.model.save_pretrained(save_directory)
-        self.tokenizer.save_pretrained(save_directory)
-        import json
-        metadata = {'task_type': self.task_type}
-        with open(os.path.join(save_directory, 'wrapper_metadata.json'), 'w') as f:
-            json.dump(metadata, f)
-        print(f"PEFT model, tokenizer, and metadata saved to {save_directory}")
-        
-    def fit(self, X, y, *args, **kwargs):
-        """
-        Fine-tune the model using LoRA.
-        X: list of texts, y: labels/targets
-        Returns: training_history (list of dicts with metrics per epoch)
-        """
-        from transformers import TrainingArguments, Trainer, TrainerCallback
-        import torch
-        from datasets import Dataset
-        ds = Dataset.from_dict({'text': X, 'labels': y})
-        def tokenize_fn(batch):
-            return self.tokenizer(batch['text'], truncation=True, padding='max_length', max_length=256)
-        ds = ds.map(tokenize_fn, batched=True)
-        ds.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
-        
-        num_epochs = kwargs.get('epochs', 2)
-        training_args = TrainingArguments(
-            output_dir='./results',
-            num_train_epochs=num_epochs,
-            per_device_train_batch_size=kwargs.get('batch_size', 8),
-            logging_steps=10,
-            report_to='none',
-            fp16=True if self.device == 'cuda' else False
-        )
-        
-        # Track training history
-        training_history = []
-        
-        class MetricsCallback(TrainerCallback):
-            def on_epoch_end(self, args, state, control, **callback_kwargs):
-                if state.log_history:
-                    latest_log = state.log_history[-1]
-                    epoch_metrics = {
-                        'epoch': state.epoch,
-                        'loss': latest_log.get('loss', 0.0),
-                    }
-                    training_history.append(epoch_metrics)
-                    print(f"Epoch {int(state.epoch)}/{num_epochs} - Loss: {epoch_metrics['loss']:.4f}")
-        
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=ds,
-            eval_dataset=None,
-            tokenizer=self.tokenizer,
-            callbacks=[MetricsCallback()],
-        )
-        trainer.train()
-        
-        return training_history
-        
-    def eval(self):
-        self.model.eval()
-        
-    def train(self):
-        self.model.train()
-        
-    def predict(self, X):
-        """For classification: returns predicted class indices. For regression: returns predicted values."""
-        import torch
-        inputs = self.tokenizer(X, return_tensors='pt', truncation=True, padding='max_length', max_length=256).to(self.device)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits
-            if self.task_type == 'classification':
-                return logits.argmax(dim=-1).cpu().numpy()
-            else:  # regression
-                return logits.squeeze().cpu().numpy()
-                
-    def predict_proba(self, X):
-        """Only for classification tasks."""
-        if self.task_type != 'classification':
-            raise ValueError("predict_proba is only available for classification tasks")
-        import torch
-        inputs = self.tokenizer(X, return_tensors='pt', truncation=True, padding='max_length', max_length=256).to(self.device)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits
-            probs = torch.softmax(logits, dim=-1)
-            return probs.cpu().numpy()
-        
-    def __call__(self, X):
-        # X: list of texts
-        import torch
-        inputs = self.tokenizer(X, return_tensors='pt', truncation=True, padding='max_length', max_length=256).to(self.device)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits
-        return logits
-    
-    def forward(self, x):
-        """
-        Forward pass for nn.Module compatibility.
-        Note: This is not typically used for text models. Use the fit/predict methods instead.
-        """
-        raise NotImplementedError(
-            "HuggingFaceLoRAWrapper uses HuggingFace Trainer for training. "
-            "Use the fit() method for training and predict()/predict_proba() for inference."
-        )
-
 class LlamaCppClassifier:
     """
     Adapter-style classifier/regressor for llama.cpp models.
@@ -836,48 +678,94 @@ class HuggingFaceQLoRAWrapper(nn.Module):
     def predict(self, X):
         """For classification: returns predicted class indices. For regression: returns predicted values."""
         import torch
-        self.model.eval()
-        predictions = []
+        import numpy as np
         
-        with torch.no_grad():
-            for text in X:
-                inputs = self.tokenizer(text, return_tensors='pt', truncation=True, 
-                                      padding='max_length', max_length=self.max_seq_length).to(self.device)
-                outputs = self.model(**inputs)
-                logits = outputs.logits
-                
-                if self.task_type == 'classification':
-                    pred = logits.argmax(dim=-1).cpu().numpy()[0]
-                else:  # regression
-                    pred = logits.squeeze().cpu().numpy()
-                    if pred.ndim == 0:  # scalar
-                        pred = pred.item()
-                predictions.append(pred)
-        
-        # If we encoded labels during training, decode them back
-        if self.task_type == 'classification' and hasattr(self, 'label_encoder'):
-            predictions = self.label_encoder.inverse_transform(predictions)
-                
-        return predictions
+        if self.task_type == 'classification':
+            # Use predict_proba for consistency
+            probs = self.predict_proba(X)
+            predictions = np.argmax(probs, axis=1)
+            
+            # Decode predictions if label encoder exists
+            if hasattr(self, 'label_encoder') and self.label_encoder is not None:
+                try:
+                    predictions = self.label_encoder.inverse_transform(predictions)
+                except Exception:
+                    pass
+            
+            return predictions
+        else:
+            # Regression - process directly
+            self.model.eval()
+            predictions = []
+            
+            # Handle both single text and list of texts
+            if isinstance(X, str):
+                X = [X]
+            
+            # Process in batches
+            batch_size = 8
+            with torch.no_grad():
+                for i in range(0, len(X), batch_size):
+                    batch_texts = X[i:i+batch_size]
+                    
+                    inputs = self.tokenizer(
+                        batch_texts,
+                        return_tensors='pt',
+                        truncation=True,
+                        padding='max_length',
+                        max_length=self.max_seq_length
+                    ).to(self.device)
+                    
+                    outputs = self.model(**inputs)
+                    logits = outputs.logits.squeeze().cpu().numpy()
+                    predictions.append(logits)
+            
+            result = np.concatenate(predictions, axis=0)
+            return result
                 
     def predict_proba(self, X):
-        """Only for classification tasks."""
+        """
+        Predict class probabilities for text inputs.
+        Returns probabilities for each class (shape: [n_samples, n_classes]).
+        """
         if self.task_type != 'classification':
             raise ValueError("predict_proba is only available for classification tasks")
         import torch
-        self.model.eval()
-        probabilities = []
+        import numpy as np
         
+        self.model.eval()
+        all_probs = []
+        
+        # Handle both single text and list of texts
+        if isinstance(X, str):
+            X = [X]
+        
+        # Process in batches for efficiency
+        batch_size = 8
         with torch.no_grad():
-            for text in X:
-                inputs = self.tokenizer(text, return_tensors='pt', truncation=True, 
-                                      padding='max_length', max_length=self.max_seq_length).to(self.device)
+            for i in range(0, len(X), batch_size):
+                batch_texts = X[i:i+batch_size]
+                
+                # Tokenize batch
+                inputs = self.tokenizer(
+                    batch_texts,
+                    return_tensors='pt',
+                    truncation=True,
+                    padding='max_length',
+                    max_length=self.max_seq_length
+                ).to(self.device)
+                
+                # Get predictions
                 outputs = self.model(**inputs)
                 logits = outputs.logits
-                probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
-                probabilities.append(probs)
                 
-        return probabilities
+                # Convert to probabilities
+                probs = torch.softmax(logits, dim=-1).cpu().numpy()
+                all_probs.append(probs)
+        
+        # Concatenate all batches and ensure it's a numpy array
+        result = np.concatenate(all_probs, axis=0)
+        return result
         
     def __call__(self, X):
         """
@@ -1219,7 +1107,6 @@ CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
     "random_forest_classifier": SklearnRandomForestClassifierWrapper,
     "xgboost_classifier": XGBoostClassifierWrapper,
     "lightgbm_classifier": LightGBMClassifierWrapper,
-    "hf_lora_classifier": lambda **kwargs: HuggingFaceLoRAWrapper(task_type='classification', **kwargs),
     "hf_qlora_classifier": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
     "llama_cpp_classifier": lambda **kwargs: LlamaCppClassifier(task_type='classification', **kwargs),
     "tabr_classifier": TabRWrapper,
@@ -1233,7 +1120,6 @@ REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
     "random_forest_regressor": SklearnRandomForestRegressorWrapper,
     "xgboost_regressor": XGBoostRegressorWrapper,
     "lightgbm_regressor": LightGBMRegressorWrapper,
-    "hf_lora_regressor": lambda **kwargs: HuggingFaceLoRAWrapper(task_type='regression', **kwargs),
     "hf_qlora_regressor": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='regression', **kwargs),
     "llama_cpp_regressor": lambda **kwargs: LlamaCppClassifier(task_type='regression', **kwargs),
 }
