@@ -694,7 +694,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             
             return predictions
         else:
-            # Regression - process directly
+            # Regression - process directly one at a time
             self.model.eval()
             predictions = []
             
@@ -702,17 +702,13 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             if isinstance(X, str):
                 X = [X]
             
-            # Process in batches
-            batch_size = 8
+            # Process one at a time to avoid padding token issues
             with torch.no_grad():
-                for i in range(0, len(X), batch_size):
-                    batch_texts = X[i:i+batch_size]
-                    
+                for text in X:
                     inputs = self.tokenizer(
-                        batch_texts,
+                        text,
                         return_tensors='pt',
                         truncation=True,
-                        padding='max_length',
                         max_length=self.max_seq_length
                     ).to(self.device)
                     
@@ -720,7 +716,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                     logits = outputs.logits.squeeze().cpu().numpy()
                     predictions.append(logits)
             
-            result = np.concatenate(predictions, axis=0)
+            result = np.array(predictions)
             return result
                 
     def predict_proba(self, X):
@@ -740,18 +736,14 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         if isinstance(X, str):
             X = [X]
         
-        # Process in batches for efficiency
-        batch_size = 8
+        # Process one at a time to avoid padding token issues
         with torch.no_grad():
-            for i in range(0, len(X), batch_size):
-                batch_texts = X[i:i+batch_size]
-                
-                # Tokenize batch
+            for text in X:
+                # Tokenize single text (no padding needed for batch_size=1)
                 inputs = self.tokenizer(
-                    batch_texts,
+                    text,
                     return_tensors='pt',
                     truncation=True,
-                    padding='max_length',
                     max_length=self.max_seq_length
                 ).to(self.device)
                 
@@ -759,12 +751,12 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                 outputs = self.model(**inputs)
                 logits = outputs.logits
                 
-                # Convert to probabilities
-                probs = torch.softmax(logits, dim=-1).cpu().numpy()
+                # Convert to probabilities (squeeze batch dimension)
+                probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
                 all_probs.append(probs)
         
-        # Concatenate all batches and ensure it's a numpy array
-        result = np.concatenate(all_probs, axis=0)
+        # Stack all predictions into a numpy array
+        result = np.stack(all_probs, axis=0)
         return result
         
     def __call__(self, X):
