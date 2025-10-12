@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from typing import Dict, Callable, Any, Optional, Sequence
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import xgboost as xgb
@@ -55,7 +56,11 @@ class SklearnRandomForestClassifierWrapper:
     def predict(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict(X)
+        predictions = self.model.predict(X)
+        # Diagnostic stats
+        unique_preds, counts = np.unique(predictions, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
+        return predictions
     def predict_proba(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
@@ -84,7 +89,10 @@ class SklearnRandomForestRegressorWrapper:
     def predict(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict(X)
+        predictions = self.model.predict(X)
+        # Diagnostic stats
+        print(f"🔍 [{self.__class__.__name__}] Predictions - min: {predictions.min():.4f}, max: {predictions.max():.4f}, mean: {predictions.mean():.4f}, std: {predictions.std():.4f}")
+        return predictions
     def __call__(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
@@ -122,7 +130,11 @@ class XGBoostClassifierWrapper:
     def predict(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict(X)
+        predictions = self.model.predict(X)
+        # Diagnostic stats
+        unique_preds, counts = np.unique(predictions, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
+        return predictions
     
     def predict_proba(self, X):
         if isinstance(X, torch.Tensor):
@@ -161,7 +173,10 @@ class XGBoostRegressorWrapper:
     def predict(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict(X)
+        predictions = self.model.predict(X)
+        # Diagnostic stats
+        print(f"🔍 [{self.__class__.__name__}] Predictions - min: {predictions.min():.4f}, max: {predictions.max():.4f}, mean: {predictions.mean():.4f}, std: {predictions.std():.4f}")
+        return predictions
     
     def __call__(self, X):
         if isinstance(X, torch.Tensor):
@@ -200,7 +215,11 @@ class LightGBMClassifierWrapper:
     def predict(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict(X)
+        predictions = self.model.predict(X)
+        # Diagnostic stats
+        unique_preds, counts = np.unique(predictions, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
+        return predictions
     
     def predict_proba(self, X):
         if isinstance(X, torch.Tensor):
@@ -257,6 +276,12 @@ class LightGBMRegressorWrapper:
         
         preds = self.model.predict(X)
         
+        # Diagnostic stats
+        if preds.ndim == 1:
+            print(f"🔍 [{self.__class__.__name__}] Predictions - min: {preds.min():.4f}, max: {preds.max():.4f}, mean: {preds.mean():.4f}, std: {preds.std():.4f}")
+        else:
+            print(f"🔍 [{self.__class__.__name__}] Predictions shape: {preds.shape}, mean per output: {preds.mean(axis=0)}")
+        
         return torch.tensor(preds, dtype=torch.float32)
 
     def __call__(self, X):
@@ -286,7 +311,10 @@ class SklearnRandomForestRegressorWrapper:
     def predict(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict(X)
+        predictions = self.model.predict(X)
+        # Diagnostic stats
+        print(f"🔍 [{self.__class__.__name__}] Predictions - min: {predictions.min():.4f}, max: {predictions.max():.4f}, mean: {predictions.mean():.4f}, std: {predictions.std():.4f}")
+        return predictions
     def __call__(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
@@ -370,6 +398,15 @@ class LlamaCppClassifier:
                     preds.append(pred.argmax(dim=-1).item())
                 else:  # regression
                     preds.append(pred.squeeze().item())
+        
+        # Diagnostic stats
+        preds_array = np.array(preds)
+        if self.task_type == 'classification':
+            unique_preds, counts = np.unique(preds_array, return_counts=True)
+            print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
+        else:
+            print(f"🔍 [{self.__class__.__name__}] Predictions - min: {preds_array.min():.4f}, max: {preds_array.max():.4f}, mean: {preds_array.mean():.4f}, std: {preds_array.std():.4f}")
+        
         return preds
 
     def predict_proba(self, prompts):
@@ -685,11 +722,22 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             probs = self.predict_proba(X)
             predictions = np.argmax(probs, axis=1)
             
+            # Diagnostic stats - check BEFORE decoding
+            unique_preds_raw, counts_raw = np.unique(predictions, return_counts=True)
+            print(f"🔍 [{self.__class__.__name__}] Raw prediction indices: {dict(zip(unique_preds_raw, counts_raw))}")
+            if len(unique_preds_raw) == 1:
+                print(f"⚠️  WARNING: All {len(predictions)} predictions are class index {unique_preds_raw[0]}")
+                print(f"   Sample probabilities (first 3): {probs[:3]}")
+            
             # Decode predictions if label encoder exists
             if hasattr(self, 'label_encoder') and self.label_encoder is not None:
                 try:
                     predictions = self.label_encoder.inverse_transform(predictions)
-                except Exception:
+                    # Diagnostic stats after decoding
+                    unique_preds_decoded, counts_decoded = np.unique(predictions, return_counts=True)
+                    print(f"   Decoded predictions: {dict(zip(unique_preds_decoded, counts_decoded))}")
+                except Exception as e:
+                    print(f"⚠️  Label decoding failed: {e}")
                     pass
             
             return predictions
@@ -717,6 +765,8 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                     predictions.append(logits)
             
             result = np.array(predictions)
+            # Diagnostic stats
+            print(f"🔍 [{self.__class__.__name__}] Predictions - min: {result.min():.4f}, max: {result.max():.4f}, mean: {result.mean():.4f}, std: {result.std():.4f}")
             return result
                 
     def predict_proba(self, X):
