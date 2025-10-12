@@ -64,7 +64,13 @@ class SklearnRandomForestClassifierWrapper:
     def predict_proba(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict_proba(X)
+        probs = self.model.predict_proba(X)
+        # Diagnostic stats
+        predicted_classes = np.argmax(probs, axis=1)
+        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
+        print(f"   Probability stats - min: {probs.min():.4f}, max: {probs.max():.4f}, mean: {probs.mean():.4f}")
+        return probs
     def __call__(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
@@ -139,7 +145,13 @@ class XGBoostClassifierWrapper:
     def predict_proba(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict_proba(X)
+        probs = self.model.predict_proba(X)
+        # Diagnostic stats
+        predicted_classes = np.argmax(probs, axis=1)
+        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
+        print(f"   Probability stats - min: {probs.min():.4f}, max: {probs.max():.4f}, mean: {probs.mean():.4f}")
+        return probs
     
     def __call__(self, X):
         if isinstance(X, torch.Tensor):
@@ -224,7 +236,13 @@ class LightGBMClassifierWrapper:
     def predict_proba(self, X):
         if isinstance(X, torch.Tensor):
             X = X.cpu().numpy()
-        return self.model.predict_proba(X)
+        probs = self.model.predict_proba(X)
+        # Diagnostic stats
+        predicted_classes = np.argmax(probs, axis=1)
+        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
+        print(f"   Probability stats - min: {probs.min():.4f}, max: {probs.max():.4f}, mean: {probs.mean():.4f}")
+        return probs
     
     def __call__(self, X):
         if isinstance(X, torch.Tensor):
@@ -424,6 +442,14 @@ class LlamaCppClassifier:
                 pred = self.classifier(logits.unsqueeze(0))
                 prob = torch.softmax(pred, dim=-1).cpu().numpy()[0]
                 probs.append(prob)
+        
+        # Diagnostic stats
+        probs_array = np.array(probs)
+        predicted_classes = np.argmax(probs_array, axis=1)
+        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
+        print(f"   Probability stats - min: {probs_array.min():.4f}, max: {probs_array.max():.4f}, mean: {probs_array.mean():.4f}")
+        
         return probs
 
 class HuggingFaceQLoRAWrapper(nn.Module):
@@ -807,6 +833,16 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         
         # Stack all predictions into a numpy array
         result = np.stack(all_probs, axis=0)
+        
+        # Diagnostic stats
+        predicted_classes = np.argmax(result, axis=1)
+        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
+        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
+        if len(unique_preds) == 1:
+            print(f"⚠️  WARNING: All {len(result)} probabilities lead to class {unique_preds[0]}")
+            print(f"   Sample probabilities (first 3): {result[:3]}")
+        print(f"   Probability stats - min: {result.min():.4f}, max: {result.max():.4f}, mean: {result.mean():.4f}")
+        
         return result
         
     def __call__(self, X):
