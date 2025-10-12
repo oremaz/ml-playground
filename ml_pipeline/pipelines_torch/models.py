@@ -675,7 +675,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             use_fp16 = False
         
         # Training configuration - use standard TrainingArguments for sequence classification
-        num_epochs = kwargs.get('epochs', 3)
+        num_epochs = kwargs.get('epochs', 2)
         training_args = TrainingArguments(
             output_dir=kwargs.get('output_dir', './qlora_results'),
             num_train_epochs=num_epochs,
