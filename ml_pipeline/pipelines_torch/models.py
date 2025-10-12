@@ -684,7 +684,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             gradient_checkpointing=True,
             optim="adamw_torch_fused",
             logging_steps=10,
-            learning_rate=kwargs.get('learning_rate', 2e-4),
+            learning_rate=kwargs.get('learning_rate', 1e-4),  # Reduced from 2e-4 for stability
             fp16=use_fp16,
             bf16=use_bf16,
             max_grad_norm=0.3,
@@ -692,6 +692,8 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             lr_scheduler_type="constant",
             report_to="none",
             save_strategy="no",  # Don't save checkpoints to save space
+            # Add label smoothing to prevent overconfident predictions
+            label_smoothing_factor=kwargs.get('label_smoothing_factor', 0.1),
         )
         
         # Create data collator for dynamic padding
