@@ -692,8 +692,6 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             lr_scheduler_type="constant",
             report_to="none",
             save_strategy="no",  # Don't save checkpoints to save space
-            # Add label smoothing to prevent overconfident predictions
-            label_smoothing_factor=kwargs.get('label_smoothing_factor', 0.1),
         )
         
         # Create data collator for dynamic padding
