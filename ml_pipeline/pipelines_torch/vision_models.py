@@ -156,7 +156,7 @@ class ResNet50(nn.Module):
 class CLIPClassifier(nn.Module):
     """Fine-tuned CLIP vision encoder with a linear classification head using Hugging Face transformers."""
 
-    def __init__(self, num_classes: int = 2, model_name: str = "openai/clip-vit-base-patch32", input_size: int = 224, unfreeze_layers: int = 0):
+    def __init__(self, num_classes: int = 2, model_name: str = "openai/clip-vit-base-patch32", input_size: int = 224):
         super().__init__()
         try:
             from transformers import CLIPVisionModel, CLIPProcessor
@@ -173,23 +173,6 @@ class CLIPClassifier(nn.Module):
         for param in self.vision_model.parameters():
             param.requires_grad = False
         
-        # Optionally unfreeze the last N transformer layers for fine-tuning
-        if unfreeze_layers > 0:
-            # Get the transformer layers (encoder.layers)
-            encoder_layers = self.vision_model.vision_model.encoder.layers
-            total_layers = len(encoder_layers)
-            
-            # Unfreeze the last N layers
-            for i in range(max(0, total_layers - unfreeze_layers), total_layers):
-                for param in encoder_layers[i].parameters():
-                    param.requires_grad = True
-            
-            # Also unfreeze the final layer norm
-            if hasattr(self.vision_model.vision_model, 'post_layernorm'):
-                for param in self.vision_model.vision_model.post_layernorm.parameters():
-                    param.requires_grad = True
-            
-            print(f"Unfroze last {unfreeze_layers} transformer layers for fine-tuning")
             
         # Add classification head
         hidden_size = self.vision_model.config.hidden_size
