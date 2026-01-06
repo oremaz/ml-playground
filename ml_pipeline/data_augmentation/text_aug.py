@@ -58,7 +58,6 @@ class LLMTextAugmenter:
     
     def _augment_single_text(self, text: str, augmentation_type: str) -> Optional[str]:
         """Augment a single text using the specified augmentation type."""
-        
         prompt = self._create_prompt(text, augmentation_type)
         
         for attempt in range(self.config.max_retries):

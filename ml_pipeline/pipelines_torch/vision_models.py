@@ -153,6 +153,66 @@ class ResNet50(nn.Module):
         return self.model(x)
 
 
+class BinaryClassifier(nn.Module):
+    """EfficientNet-based binary classifier for AI-generated image detection (DiffusionFake architecture)."""
+    
+    # Encoder configurations mapping encoder names to features and initialization
+    ENCODER_PARAMS = {
+        "xception": {
+            "features": 2048,
+            "init_op": lambda **kwargs: timm.create_model('xception', pretrained=True, **kwargs)
+        },
+        "tf_efficientnet_b2_ns": {
+            "features": 1408,
+            "init_op": lambda **kwargs: timm.create_model('tf_efficientnet_b2_ns', pretrained=True, **kwargs)
+        },
+        "tf_efficientnet_b3_ns": {
+            "features": 1536,
+            "init_op": lambda **kwargs: timm.create_model('tf_efficientnet_b3_ns', pretrained=True, **kwargs)
+        },
+        "tf_efficientnet_b4_ns": {
+            "features": 1792,
+            "init_op": lambda **kwargs: timm.create_model('tf_efficientnet_b4_ns', pretrained=True, **kwargs)
+        },
+        "tf_efficientnet_b5_ns": {
+            "features": 2048,
+            "init_op": lambda **kwargs: timm.create_model('tf_efficientnet_b5_ns', pretrained=True, **kwargs)
+        },
+        "tf_efficientnet_b6_ns": {
+            "features": 2304,
+            "init_op": lambda **kwargs: timm.create_model('tf_efficientnet_b6_ns', pretrained=True, **kwargs)
+        },
+        "tf_efficientnet_b7_ns": {
+            "features": 2560,
+            "init_op": lambda **kwargs: timm.create_model('tf_efficientnet_b7_ns', pretrained=True, **kwargs)
+        },
+    }
+
+    def __init__(self, encoder: str = "tf_efficientnet_b4_ns", num_classes: int = 1, drop_rate: float = 0.2, has_feature: bool = True, feature_dim: int = 128) -> None:
+        super().__init__()
+        if encoder not in self.ENCODER_PARAMS:
+            raise ValueError(f"Unknown encoder '{encoder}'. Available: {list(self.ENCODER_PARAMS.keys())}")
+        
+        self.encoder = self.ENCODER_PARAMS[encoder]["init_op"]()
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(drop_rate)
+        self.channel_drop = nn.Dropout2d(drop_rate)
+        self.has_feature = has_feature
+        self.feature_dim = self.ENCODER_PARAMS[encoder]["features"]
+        self.feature = nn.Linear(self.feature_dim, feature_dim)
+        self.fc = nn.Linear(self.feature_dim, num_classes)
+
+    def forward(self, x, return_features: bool = False):
+        featuremap = self.encoder.forward_features(x)
+        x = self.global_pool(featuremap).flatten(1)
+        output = self.fc(x)
+
+        if self.has_feature and return_features:
+            return output, featuremap
+
+        return output
+
+
 class CLIPClassifier(nn.Module):
     """Fine-tuned CLIP vision encoder with a linear classification head using Hugging Face transformers."""
 
@@ -343,38 +403,6 @@ class FatFormerOfficial(ThirdPartyModelWrapper):
         )
 
 
-class DiffusionFakeOfficial(ThirdPartyModelWrapper):
-    """Wrapper for the official DiffusionFake detector (NeurIPS 2024)."""
-
-    def __init__(
-        self,
-        num_classes: int = 2,
-        *,
-        repo_path: Optional[str] = None,
-        class_name: str = "BinaryClassifier",
-        module_candidates: Optional[Sequence[str]] = (
-            "DiffusionFake.models.image",
-            "models.image",
-        ),
-        model_kwargs: Optional[dict] = None,
-        env_var: str = "DIFFUSIONFAKE_REPO",
-        encoder_name: str = "tf_efficientnet_b4_ns",
-    ) -> None:
-        kwargs = dict(model_kwargs or {})
-        kwargs.setdefault("encoder", kwargs.pop("encoder", encoder_name))
-        if num_classes is not None:
-            kwargs.setdefault("num_classes", num_classes)
-
-        super().__init__(
-            "DiffusionFake",
-            class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-            init_kwargs=kwargs,
-        )
-
-
 class TimmVisionModel(nn.Module):
     """Thin wrapper around timm backbones for registry-friendly initialization."""
 
@@ -452,10 +480,10 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "adaptive_cnn": AdaptiveCNN,
     "residual_cnn": ResidualCNN,
     "resnet50": ResNet50,
+    "efficientnet": BinaryClassifier,
     "clip_classifier": CLIPClassifier,
     "qwen2_vl_qlora": Qwen2VLQLoRA,
     "fatformer_official": FatFormerOfficial,
-    "diffusionfake_official": DiffusionFakeOfficial,
     # Modern timm-based backbones for vision benchmarks
     "timm_convnextv2_tiny": _register_timm_model(
         "convnextv2_tiny.fcmae_ft_in1k", registry_name="convnextv2_tiny"
