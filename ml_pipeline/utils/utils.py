@@ -19,6 +19,33 @@ else:
 
 os.makedirs(RESULTS_DIR_OUT, exist_ok=True)
 
+def model_exists(model_name, path_start):
+    """Check if a saved model already exists."""
+    if path_start is not None:
+        base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
+    else:
+        base_dir = RESULTS_DIR_OUT
+    
+    # Check for PyTorch state dict (.pt file)
+    pt_path = os.path.join(base_dir, f"{model_name}.pt")
+    if os.path.exists(pt_path):
+        return True
+    
+    # Check for HuggingFace save_pretrained directory
+    hf_dir = os.path.join(base_dir, model_name)
+    if os.path.isdir(hf_dir):
+        # Check if directory contains model files
+        expected_files = ["config.json", "pytorch_model.bin", "model.safetensors"]
+        if any(os.path.exists(os.path.join(hf_dir, f)) for f in expected_files):
+            return True
+    
+    # Check for sklearn joblib file
+    joblib_path = os.path.join(base_dir, f"{model_name}.pkl")
+    if os.path.exists(joblib_path):
+        return True
+    
+    return False
+
 def save_model(model, model_name, path_start):
     if path_start is not None:
         base_dir = os.path.join(RESULTS_DIR_OUT, path_start)

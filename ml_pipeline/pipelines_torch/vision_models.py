@@ -475,12 +475,37 @@ def _register_timm_model(
     return _TimmWrapper
 
 
+def _register_binary_classifier(
+    encoder: str,
+    *,
+    registry_name: str,
+    default_kwargs: Optional[Dict[str, object]] = None,
+) -> Callable[..., nn.Module]:
+    """Create a callable that instantiates :class:`BinaryClassifier` with a specific encoder."""
+
+    defaults = dict(default_kwargs or {})
+
+    class _BinaryClassifierWrapper(BinaryClassifier):
+        def __init__(self, num_classes: int = 2, **kwargs) -> None:
+            params = dict(defaults)
+            params.update(kwargs)
+            super().__init__(encoder=encoder, num_classes=num_classes, **params)
+
+    _BinaryClassifierWrapper.__name__ = f"BinaryClassifier_{registry_name.title().replace('-', '_')}"
+    return _BinaryClassifierWrapper
+
+
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     "simple_cnn": SimpleCNN,
     "adaptive_cnn": AdaptiveCNN,
     "residual_cnn": ResidualCNN,
     "resnet50": ResNet50,
-    "efficientnet": BinaryClassifier,
+    "binary_efficientnet_b4_ns": _register_binary_classifier(
+        "tf_efficientnet_b4_ns", registry_name="efficientnet_b4_ns"
+    ),
+    "binary_xception": _register_binary_classifier(
+        "xception", registry_name="xception"
+    ),
     "clip_classifier": CLIPClassifier,
     "qwen2_vl_qlora": Qwen2VLQLoRA,
     "fatformer_official": FatFormerOfficial,
@@ -506,8 +531,3 @@ def get_model(name: str, num_classes: int = 2, **kwargs) -> nn.Module:
     if name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model '{name}'. Available: {list(MODEL_REGISTRY)}")
     return MODEL_REGISTRY[name](num_classes=num_classes, **kwargs)
-
-if __name__ == "__main__":
-    # Example usage and sanity check
-    model = get_model("timm_naflexvit_base", num_classes=10)
-    print(model)

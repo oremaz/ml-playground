@@ -5,7 +5,7 @@ import random
 import numpy as np
 import torch
 from pipelines_torch.base import GeneralPipeline
-from utils.utils import save_model, save_metrics
+from utils.utils import save_model, save_metrics, model_exists
 
 def set_all_seeds(seed: int):
     """Set random seed for all libraries to ensure reproducibility."""
@@ -132,6 +132,13 @@ class BenchmarkRunner:
             epochs = self._resolve_epochs(model_name, model_idx)
             for aug in tqdm(self.augmentations, desc="Augmentations", leave=False):
                 aug_name = aug.__name__ if aug is not None else "none"
+                
+                # Check if model already exists
+                checkpoint_name = f"{model_name}_{aug_name}"
+                if model_exists(checkpoint_name, path_start=self.path_start):
+                    print(f"\n✅ Skipping {model_name} | {aug_name} (checkpoint already exists)")
+                    continue
+                
                 print(f"\nRunning Model: {model_name} | Augmentation: {aug_name}")
                 # Print class distribution for classification tasks
                 if self.task_type == "classification":
