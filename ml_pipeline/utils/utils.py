@@ -1,4 +1,6 @@
 import os
+import json
+import hashlib
 import joblib
 import torch
 import pandas as pd
@@ -19,116 +21,154 @@ else:
 
 os.makedirs(RESULTS_DIR_OUT, exist_ok=True)
 
-def model_exists(model_name, path_start):
-    """Check if a saved model already exists."""
-    if path_start is not None:
-        base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
-    else:
-        base_dir = RESULTS_DIR_OUT
-    
-    # Check for PyTorch state dict (.pt file)
-    pt_path = os.path.join(base_dir, f"{model_name}.pt")
-    if os.path.exists(pt_path):
-        return True
-    
-    # Check for HuggingFace save_pretrained directory
-    hf_dir = os.path.join(base_dir, model_name)
-    if os.path.isdir(hf_dir):
-        # Check if directory contains model files
-        expected_files = ["config.json", "pytorch_model.bin", "model.safetensors"]
-        if any(os.path.exists(os.path.join(hf_dir, f)) for f in expected_files):
-            return True
-    
-    # Check for sklearn joblib file
-    joblib_path = os.path.join(base_dir, f"{model_name}.pkl")
-    if os.path.exists(joblib_path):
-        return True
-    
-    return False
+def _index_path(path_start: str) -> str:
+    return os.path.join(RESULTS_DIR_OUT, path_start, "index.jsonl")
 
-def save_model(model, model_name, path_start):
-    if path_start is not None:
-        base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
-    else:
+
+def _load_index(path_start: str) -> dict:
+    index_path = _index_path(path_start)
+    if not os.path.exists(index_path):
+        return {}
+    entries = {}
+    with open(index_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            entry = json.loads(line)
+            entries[entry["checkpoint_id"]] = entry
+    return entries
+
+
+def _write_index_entry(path_start: str, entry: dict) -> None:
+    index_path = _index_path(path_start)
+    os.makedirs(os.path.dirname(index_path), exist_ok=True)
+    with open(index_path, "a") as f:
+        f.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def _checkpoint_id(metadata_core: dict) -> str:
+    payload = json.dumps(metadata_core, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def get_checkpoint_id(
+    path_start: str,
+    model_name: str,
+    augmentation_name: str = "none",
+    task_type: str = None,
+) -> str:
+    index = _load_index(path_start)
+    matches = [
+        v
+        for v in index.values()
+        if v.get("model_name") == model_name
+        and v.get("augmentation_name") == augmentation_name
+        and (task_type is None or v.get("task_type") == task_type)
+    ]
+    if not matches:
+        raise FileNotFoundError("No matching checkpoint in index.jsonl.")
+    if len(matches) > 1:
+        raise ValueError("Multiple matches found; refine your query.")
+    return matches[0]["checkpoint_id"]
+
+
+def load_model_by_name(
+    model_class,
+    model_name: str,
+    params: dict,
+    path_start: str,
+    augmentation_name: str = "none",
+    task_type: str = None,
+):
+    checkpoint_id = get_checkpoint_id(
+        path_start=path_start,
+        model_name=model_name,
+        augmentation_name=augmentation_name,
+        task_type=task_type,
+    )
+    return load_model(model_class, params, path_start=path_start, checkpoint_id=checkpoint_id)
+
+
+def model_exists(metadata_core: dict, path_start: str) -> bool:
+    if path_start is None:
+        raise ValueError("path_start must be provided to check model existence.")
+    checkpoint_id = _checkpoint_id(metadata_core)
+    index = _load_index(path_start)
+    return checkpoint_id in index
+
+def save_model(model, path_start: str, metadata_core: dict) -> dict:
+    if path_start is None:
         raise ValueError("path_start must be provided to save the model.")
+    base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
     os.makedirs(base_dir, exist_ok=True)
-    
-    # Priority order for saving:
-    # 1. HuggingFace models with save_pretrained (PEFT/LoRA models)
-    # 2. PyTorch models with state_dict
-    # 3. Sklearn models via joblib
-    
+
+    checkpoint_id = _checkpoint_id(metadata_core)
+
     if hasattr(model, "save_pretrained"):
-        # HuggingFace models (including PEFT/LoRA wrapped models)
-        save_dir = os.path.join(base_dir, model_name)
+        save_dir = os.path.join(base_dir, checkpoint_id)
         os.makedirs(save_dir, exist_ok=True)
         model.save_pretrained(save_dir)
-        # Also save tokenizer if available
         if hasattr(model, "tokenizer"):
             model.tokenizer.save_pretrained(save_dir)
+        artifact_type = "hf_dir"
+        artifact_path = checkpoint_id
         print(f"Model saved to {save_dir}")
     elif hasattr(model, "state_dict"):
-        # PyTorch models
-        path = os.path.join(base_dir, f"{model_name}.pt")
+        path = os.path.join(base_dir, f"{checkpoint_id}.pt")
         torch.save(model.state_dict(), path)
+        artifact_type = "pt_file"
+        artifact_path = f"{checkpoint_id}.pt"
         print(f"Model state dict saved to {path}")
     elif hasattr(model, "model"):
-        # Sklearn models wrapped in a class
-        path = os.path.join(base_dir, f"{model_name}.pt")
+        path = os.path.join(base_dir, f"{checkpoint_id}.pkl")
         joblib.dump(model.model, path)
+        artifact_type = "joblib"
+        artifact_path = f"{checkpoint_id}.pkl"
         print(f"Model saved to {path}")
     else:
-        print(f"Warning: Could not determine how to save model of type {type(model)}")
+        raise ValueError(f"Could not determine how to save model of type {type(model)}")
 
-def load_model(model_class, model_name, params, path_start, augmentation=None):
+    entry = dict(metadata_core)
+    entry.update(
+        {
+            "checkpoint_id": checkpoint_id,
+            "artifact_type": artifact_type,
+            "artifact_path": artifact_path,
+        }
+    )
+    index = _load_index(path_start)
+    if checkpoint_id not in index:
+        _write_index_entry(path_start, entry)
+    return entry
+
+def load_model(
+    model_class,
+    params,
+    path_start,
+    checkpoint_id: str,
+):
     """
-    Load a trained model from disk.
-    
-    Supports:
-    - HuggingFace models with PEFT/LoRA adapters (saved via save_pretrained)
-    - PyTorch models (saved via state_dict)
-    - Sklearn models (saved via joblib)
+    Load a trained model from disk using index metadata.
+
+    Provide:
+    - checkpoint_id
     """
-    augmentation = augmentation or 'none'
     if path_start is None:
         raise ValueError("path_start must be provided to load the model.")
+    if checkpoint_id is None:
+        raise ValueError("checkpoint_id must be provided to load a model.")
 
-    candidate_dirs = []
-    if _running_on_kaggle():
-        candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
-        candidate_dirs.append(os.path.join(RESULTS_DIR_OUT, path_start))
-    else:
-        candidate_dirs.append(os.path.join(RESULTS_DIR_IN, path_start))
+    index = _load_index(path_start)
+    entry = index.get(checkpoint_id)
+    if entry is None:
+        raise FileNotFoundError(f"Checkpoint {checkpoint_id} not found in index.jsonl.")
 
-    # Try to find the model directory or file
-    model_dir_name = f"{model_name}_{augmentation}"
-    model_file_name = f"{model_name}_{augmentation}.pt"
-    
-    found_path = None
-    is_directory = False
-    
-    for base_dir in candidate_dirs:
-        # First, check if it's a directory (HuggingFace format)
-        candidate_dir = os.path.join(base_dir, model_dir_name)
-        if os.path.isdir(candidate_dir):
-            # Check if it contains HuggingFace model files
-            dir_contents = os.listdir(candidate_dir)
-            if any(f in dir_contents for f in ['adapter_config.json', 'adapter_model.safetensors', 'config.json']):
-                found_path = candidate_dir
-                is_directory = True
-                break
-        
-        # Then check for .pt file (PyTorch/sklearn format)
-        candidate_file = os.path.join(base_dir, model_file_name)
-        if os.path.exists(candidate_file):
-            found_path = candidate_file
-            is_directory = False
-            break
-
-    if found_path is None:
-        raise FileNotFoundError(
-            f"Could not find model '{model_name}_{augmentation}' in any of the candidate directories: {candidate_dirs}"
-        )
+    base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
+    found_path = os.path.join(base_dir, entry["artifact_path"])
+    if not os.path.exists(found_path):
+        raise FileNotFoundError(f"Checkpoint artifact not found at {found_path}")
+    is_directory = entry["artifact_type"] == "hf_dir"
     
     print(f"Loading model from: {found_path}")
     
@@ -241,14 +281,14 @@ def load_model(model_class, model_name, params, path_start, augmentation=None):
     return model
 
 
-def save_metrics(metrics, model_name, phase, path_start):
+def save_metrics(metrics, checkpoint_id, path_start):
     if path_start is not None:
         base_dir = os.path.join(RESULTS_DIR_OUT, path_start)
     else:
         raise ValueError("path_start must be provided to save metrics.")
     os.makedirs(base_dir, exist_ok=True)
     df = pd.DataFrame(metrics)
-    df.to_csv(os.path.join(base_dir, f"{model_name}_{phase}_metrics.csv"), index=False)
+    df.to_csv(os.path.join(base_dir, f"{checkpoint_id}_metrics.csv"), index=False)
 
 def select_best_epoch(history, task_type='classification', metric=None):
     """

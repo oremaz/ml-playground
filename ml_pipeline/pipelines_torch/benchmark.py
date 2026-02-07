@@ -131,11 +131,27 @@ class BenchmarkRunner:
 
             epochs = self._resolve_epochs(model_name, model_idx)
             for aug in tqdm(self.augmentations, desc="Augmentations", leave=False):
-                aug_name = aug.__name__ if aug is not None else "none"
+                if isinstance(aug, (tuple, list)) and len(aug) == 2:
+                    aug_name, aug_fn = aug
+                else:
+                    aug_fn = aug
+                    aug_name = aug.__name__ if aug is not None else "none"
                 
                 # Check if model already exists
-                checkpoint_name = f"{model_name}_{aug_name}"
-                if model_exists(checkpoint_name, path_start=self.path_start):
+                lr_value = self.learning_rate if self.learning_rate is not None else 1e-4
+                metadata_core = {
+                    "model_name": model_name,
+                    "augmentation_name": aug_name,
+                    "task_type": self.task_type,
+                    "epochs": epochs,
+                    "learning_rate": lr_value,
+                    "weight_decay": self.weight_decay,
+                    "dropout": self.dropout,
+                    "batch_size": self.batch_size,
+                    "use_kfold": self.use_kfold,
+                    "k_folds": self.k_folds,
+                }
+                if model_exists(metadata_core, path_start=self.path_start):
                     print(f"\n✅ Skipping {model_name} | {aug_name} (checkpoint already exists)")
                     continue
                 
@@ -154,7 +170,7 @@ class BenchmarkRunner:
                 else:
                     loss_fn = "MSELoss"
                 optimizer_cls = optim.Adam
-                optimizer_params = {"lr": self.learning_rate if self.learning_rate is not None else 1e-4}
+                optimizer_params = {"lr": lr_value}
                 if self.weight_decay is not None:
                     optimizer_params["weight_decay"] = self.weight_decay
                 # Dynamically select pipeline type
@@ -170,7 +186,7 @@ class BenchmarkRunner:
                         optimizer_params=optimizer_params,
                         scheduler_cls=None,
                         scheduler_params=None,
-                        augmentations=aug,
+                        augmentations=aug_fn,
                         metrics=self.metrics,
                         task_type=self.task_type,
                         device=self.device,
@@ -195,7 +211,7 @@ class BenchmarkRunner:
                         metrics=self.metrics,
                         task_type=self.task_type,
                         use_class_weights=self.use_class_weights,
-                        augmentations=aug,
+                        augmentations=aug_fn,
                         max_factor=self.max_factor,
                         random_state=self.random_state,
                         use_kfold=self.use_kfold,
@@ -208,10 +224,10 @@ class BenchmarkRunner:
                     print(f"Computed class weights: {pipeline.class_weights}")
                 
                 # Save model weights if specified
-                save_model(pipeline.model, f"{model_name}_{aug_name}", path_start=self.path_start)
+                entry = save_model(pipeline.model, path_start=self.path_start, metadata_core=metadata_core)
                 
                 # Save metrics
-                save_metrics(training_history, model_name, aug_name, path_start=self.path_start)
+                save_metrics(training_history, entry["checkpoint_id"], path_start=self.path_start)
                 
 
     def _resolve_epochs(self, model_name: str, model_idx: int) -> int:
