@@ -16,6 +16,15 @@ This folder is the working area for benchmarking ML pipelines across vision, tab
   - **`utils/kaggle_utils.py`**: Kaggle/local dataset resolution and downloads.
 - **`utils/utils.py`**: Results directory handling and save/load for PyTorch, sklearn, and HF/PEFT models.
 
+### Logging
+
+All pipeline, model wrapper, and benchmark diagnostics use Python's `logging` module. To see debug output (prediction distributions, metric details):
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
 ### Experiments & Notebooks
 - **`benchmark_app.py`**: **Streamlit UI** for interactive model benchmarking. Upload CSV datasets, select models/augmentations from registries, configure training parameters (epochs, batch size, learning rate), and visualize results in real-time. Supports classification and regression tasks with automatic metric computation.
 - **`bench-imai.ipynb`**: I trained and benchmarked image classifiers that discriminate AI-generated images from real ones using the CIFAKE dataset. I compared multiple vision backbones, saved checkpoints, evaluated on the CIFAKE test split, and then reused the saved weights to check cross-dataset generalization on the "Shoes: AI vs Real" Kaggle dataset (with an optional step to download FatFormer weights).
@@ -24,8 +33,12 @@ This folder is the working area for benchmarking ML pipelines across vision, tab
 ### Data Artifacts
 - **`recipes_df.csv`**, **`recipes_df_test.csv`**, **`recipes_df_test_bis.csv`**: Recipe datasets with embeddings, text, nutrition, and time fields used by the recipe notebook tasks.
 
-### External Research Code
-- **`third_party/`**: A folder that contains copies of external research implementations (e.g., official model repos). These are not authored here; the pipeline adapters point to them, and each subfolder keeps its upstream README and license.
+### Testing
+- **`tests/`**: 64 unit tests covering scoring (`ComputeScore`), sklearn wrappers, PyTorch and sklearn pipelines (single-split and k-fold), checkpoint save/load round-trips, and `BenchmarkRunner` epoch normalization + smoke runs.
+
+```bash
+cd ml_pipeline && python -m pytest tests/ -v
+```
 
 ---
 

@@ -67,9 +67,9 @@ class SemiSupervisedTabular(nn.Module):
         self,
         batch_l: Tuple[torch.Tensor, torch.Tensor],
         batch_u: Tuple[torch.Tensor, torch.Tensor | None],
-        epoch: int,
+        step: int,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        loss_sup, loss_unsup, logs = self.ssl_model.ssl_loss(batch_l, batch_u, epoch)
+        loss_sup, loss_unsup, logs = self.ssl_model.ssl_loss(batch_l, batch_u, step)
         total_loss = loss_sup + loss_unsup
         return total_loss, logs
 

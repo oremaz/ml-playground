@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 from typing import Callable, List, Optional, Dict, Any, Tuple, Union
@@ -11,6 +12,9 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score, roc_auc_score, average_precision_score
 from sklearn.preprocessing import label_binarize
 from utils.utils import select_best_epoch
+from utils.data import train_val_test_split
+
+logger = logging.getLogger(__name__)
 
 
 class Evaluate:
@@ -24,10 +28,75 @@ class Evaluate:
         self.batch_size = 32
         self.random_state = 42
         self.device = "cpu"
+        self.history = []
+        self.cv_results = {}
+        self.use_kfold = False
 
     def _default_selection_metric(self) -> str:
         """Return the metric name used to pick the best epoch."""
         return "roc_auc" if self.task_type == "classification" else "r2_score"
+
+    # ----- Cross-validation shared methods --------------------------------
+    def _compute_cv_statistics(self, fold_scores: List[Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+        """Compute cross-validation statistics (mean +/- std) for each metric."""
+        if not fold_scores:
+            return {}
+        all_metrics = set()
+        for scores in fold_scores:
+            all_metrics.update(scores.keys())
+        cv_stats = {}
+        for metric in all_metrics:
+            metric_values = [scores.get(metric) for scores in fold_scores]
+            metric_array = np.array([v if v is not None else np.nan for v in metric_values], dtype=float)
+            cv_stats[metric] = {
+                'mean': float(np.nanmean(metric_array)),
+                'std': float(np.nanstd(metric_array)),
+                'values': metric_array.tolist()
+            }
+        return cv_stats
+
+    def _print_cv_results(self, cv_results: Dict[str, Dict[str, float]]):
+        """Print cross-validation results."""
+        if not cv_results:
+            return
+        primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
+        logger.info("\n%s", "=" * 60)
+        logger.info("CROSS-VALIDATION RESULTS")
+        logger.info("%s", "=" * 60)
+        if primary_metric in cv_results:
+            stats = cv_results[primary_metric]
+            logger.info("  %15s: %.4f +/- %.4f", primary_metric.upper(), stats['mean'], stats['std'])
+            logger.info("")
+        for metric, stats in sorted(cv_results.items()):
+            if metric != primary_metric:
+                logger.info("  %15s: %.4f +/- %.4f", metric, stats['mean'], stats['std'])
+        logger.info("%s\n", "=" * 60)
+
+    def _create_cv_metrics_summary(self, cv_results: Dict[str, Dict[str, float]], fold_scores: List[Dict[str, float]]) -> List[Dict[str, float]]:
+        """Create a metrics summary compatible with save_metrics function."""
+        metrics_summary = []
+        summary_row = {'fold': 'CV_MEAN'}
+        for metric, stats in cv_results.items():
+            summary_row[metric] = stats['mean']
+            summary_row[f"{metric}_std"] = stats['std']
+        metrics_summary.append(summary_row)
+        for fold_idx, fold_metrics in enumerate(fold_scores):
+            fold_row = {'fold': f'fold_{fold_idx + 1}'}
+            fold_row.update(fold_metrics)
+            metrics_summary.append(fold_row)
+        return metrics_summary
+
+    def get_training_history(self) -> List[Dict[str, float]]:
+        """Get training history compatible with save_metrics."""
+        if hasattr(self, 'cv_results') and self.cv_results and self.use_kfold:
+            return self.cv_results.get('training_history', [])
+        return self.history
+
+    def get_cv_scores(self) -> Optional[Dict[str, Dict[str, float]]]:
+        """Get cross-validation scores summary, or None if CV wasn't performed."""
+        if not hasattr(self, 'cv_results') or not self.cv_results.get('cv_scores'):
+            return None
+        return self.cv_results['cv_scores']
 
     def prepare_data_internal(
         self,
@@ -70,7 +139,10 @@ class Evaluate:
             key = getattr(metric, "name", None) or getattr(metric, "__name__", None) or str(metric)
             try:
                 results[key] = float(metric(targets_np, preds_np))
-            except Exception:
+            except (ValueError, TypeError, IndexError):
+                results[key] = 0.0
+            except Exception as e:
+                logger.warning("Unexpected error computing metric %s: %s", key, e)
                 results[key] = 0.0
         return results
 
@@ -83,7 +155,10 @@ class Evaluate:
             key = getattr(metric, "name", None) or getattr(metric, "__name__", None) or str(metric)
             try:
                 results[key] = float(metric(y, y_pred))
-            except Exception:
+            except (ValueError, TypeError, IndexError):
+                results[key] = 0.0
+            except Exception as e:
+                logger.warning("Unexpected error computing metric %s: %s", key, e)
                 results[key] = 0.0
         return results
 
@@ -170,7 +245,11 @@ class ComputeScore:
                 else:
                     preds_processed = preds_array
             return float(f1_score(targets_array, preds_processed, average=average, zero_division=0))
-        except Exception:
+        except (ValueError, IndexError) as e:
+            logger.debug("f1 computation failed: %s", e)
+            return None
+        except Exception as e:
+            logger.warning("Unexpected error in f1 computation: %s", e)
             return None
 
     @staticmethod
@@ -180,7 +259,11 @@ class ComputeScore:
         try:
             from sklearn.metrics import r2_score
             return float(r2_score(targets, preds))
-        except Exception:
+        except (ValueError, TypeError) as e:
+            logger.debug("r2 computation failed: %s", e)
+            return None
+        except Exception as e:
+            logger.warning("Unexpected error in r2 computation: %s", e)
             return None
 
     @staticmethod
@@ -199,7 +282,11 @@ class ComputeScore:
                     return float(roc_auc_score(y_true, y_scores[:, 1]))
                 return float(roc_auc_score(y_true, y_scores, multi_class="ovr", average="macro"))
             return None
-        except Exception:
+        except (ValueError, IndexError) as e:
+            logger.debug("roc_auc computation failed: %s", e)
+            return None
+        except Exception as e:
+            logger.warning("Unexpected error in roc_auc computation: %s", e)
             return None
 
     @staticmethod
@@ -220,7 +307,11 @@ class ComputeScore:
                 y_true_bin = label_binarize(y_true, classes=classes)
                 return float(average_precision_score(y_true_bin, y_scores, average="macro"))
             return None
-        except Exception:
+        except (ValueError, IndexError) as e:
+            logger.debug("pr_auc computation failed: %s", e)
+            return None
+        except Exception as e:
+            logger.warning("Unexpected error in pr_auc computation: %s", e)
             return None
         
 
@@ -324,10 +415,10 @@ class GeneralPipelineSklearn(Evaluate):
         
         fold_scores = []
         
-        print(f"Starting {self.k_folds}-fold cross-validation for sklearn model...")
-        
+        logger.info("Starting %d-fold cross-validation for sklearn model...", self.k_folds)
+
         for fold, (train_idx, val_idx) in enumerate(cv_iterator):
-            print(f"Training fold {fold + 1}/{self.k_folds}")
+            logger.info("Training fold %d/%d", fold + 1, self.k_folds)
             
             # Split data for this fold
             X_fold_train, X_fold_val = X[train_idx], X[val_idx]
@@ -366,7 +457,10 @@ class GeneralPipelineSklearn(Evaluate):
                 metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
                 try:
                     fold_metrics[metric_key] = metric(y_fold_val, y_pred)
-                except:
+                except (ValueError, TypeError, IndexError):
+                    fold_metrics[metric_key] = 0.0
+                except Exception as e:
+                    logger.warning("Unexpected error computing metric %s in fold: %s", metric_key, e)
                     fold_metrics[metric_key] = 0.0
             
             fold_scores.append(fold_metrics)
@@ -375,17 +469,17 @@ class GeneralPipelineSklearn(Evaluate):
             primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
             metric_value = fold_metrics.get(primary_metric)
             if metric_value is not None:
-                print(f"  Fold {fold + 1} {primary_metric}: {metric_value:.4f}")
-        
+                logger.info("  Fold %d %s: %.4f", fold + 1, primary_metric, metric_value)
+
         # Calculate cross-validation statistics
         cv_results = self._compute_cv_statistics(fold_scores)
         self._print_cv_results(cv_results)
-        
+
         # Train final model on full dataset
-        print(f"\nTraining final model on full dataset...")
+        logger.info("Training final model on full dataset...")
         self.internal_fit(X, y, None, None, self.model)
-        
-        print("✅ Final model trained successfully on full dataset!")
+
+        logger.info("Final model trained successfully on full dataset!")
         
         return {
             'cv_scores': cv_results,
@@ -442,73 +536,6 @@ class GeneralPipelineSklearn(Evaluate):
         else:
             model.fit(X_train, y_train)
     
-    def _compute_cv_statistics(self, fold_scores: List[Dict[str, float]]) -> Dict[str, Dict[str, float]]:
-        """Compute cross-validation statistics (mean ± std) for each metric."""
-        if not fold_scores:
-            return {}
-        
-        # Get all metrics
-        all_metrics = set()
-        for scores in fold_scores:
-            all_metrics.update(scores.keys())
-        
-        cv_stats = {}
-        for metric in all_metrics:
-            metric_values = [scores.get(metric) for scores in fold_scores]
-            metric_array = np.array([v if v is not None else np.nan for v in metric_values], dtype=float)
-            cv_stats[metric] = {
-                'mean': float(np.nanmean(metric_array)),
-                'std': float(np.nanstd(metric_array)),
-                'values': metric_array.tolist()
-            }
-        
-        return cv_stats
-    
-    def _print_cv_results(self, cv_results: Dict[str, Dict[str, float]]):
-        """Print cross-validation results following scikit-learn format."""
-        if not cv_results:
-            return
-        
-        primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
-        
-        print(f"\n{'='*60}")
-        print("CROSS-VALIDATION RESULTS")
-        print(f"{'='*60}")
-        
-        # Print primary metric first
-        if primary_metric in cv_results:
-            stats = cv_results[primary_metric]
-            print(f"🎯 {primary_metric.upper():15s}: {stats['mean']:.4f} ± {stats['std']:.4f}")
-            print()
-        
-        # Print other metrics
-        for metric, stats in sorted(cv_results.items()):
-            if metric != primary_metric:
-                print(f"{metric:15s}: {stats['mean']:.4f} ± {stats['std']:.4f}")
-        
-        print(f"{'='*60}\n")
-    
-    def _create_cv_metrics_summary(self, cv_results: Dict[str, Dict[str, float]], fold_scores: List[Dict[str, float]]) -> List[Dict[str, float]]:
-        """
-        Create a metrics summary compatible with save_metrics function.
-        """
-        metrics_summary = []
-        
-        # Add overall CV summary as first row
-        summary_row = {'fold': 'CV_MEAN'}
-        for metric, stats in cv_results.items():
-            summary_row[metric] = stats['mean']
-            summary_row[f"{metric}_std"] = stats['std']
-        metrics_summary.append(summary_row)
-        
-        # Add individual fold results
-        for fold_idx, fold_metrics in enumerate(fold_scores):
-            fold_row = {'fold': f'fold_{fold_idx + 1}'}
-            fold_row.update(fold_metrics)
-            metrics_summary.append(fold_row)
-        
-        return metrics_summary
-
     def _evaluate(self, X, y):
         if X is None or y is None:
             return {}
@@ -540,7 +567,7 @@ class GeneralPipelineSklearn(Evaluate):
             Access CV results via get_cv_scores() method if needed.
         """
         if self.use_kfold:
-            print(f"Starting {self.k_folds}-fold cross-validation for sklearn model")
+            logger.info("Starting %d-fold cross-validation for sklearn model", self.k_folds)
             results = self._kfold_fit(X, y)
             self.cv_results = results  # Store for later access
             
@@ -548,13 +575,6 @@ class GeneralPipelineSklearn(Evaluate):
             return results.get('training_history', [])
         else:
             # Single train/validation split
-            import sys
-            import os
-            # Add the parent directory to path to import from utils
-            sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-            from utils.data import train_val_test_split
-            
-            # Use train_val_test_split function
             if self.task_type == "classification":
                 X_train, X_val, _, y_train, y_val, _ = train_val_test_split(
                     X, y, val_size=0.2, test_size=0, stratify=y, random_state=self.random_state
@@ -581,33 +601,6 @@ class GeneralPipelineSklearn(Evaluate):
             self.history = history
             return history
     
-    def get_training_history(self) -> List[Dict[str, float]]:
-        """
-        Get training history in format compatible with save_metrics function.
-        
-        Returns:
-            List of dictionaries with epoch-by-epoch or fold-by-fold metrics
-        """
-        if hasattr(self, 'cv_results') and self.cv_results and self.use_kfold:
-            # Return CV-compatible format
-            return self.cv_results.get('training_history', [])
-        else:
-            # Return original history
-            return self.history
-
-    def get_cv_scores(self) -> Optional[Dict[str, Dict[str, float]]]:
-        """
-        Get cross-validation scores summary.
-        
-        Returns:
-            Dictionary with mean, std, and individual values for each metric,
-            or None if CV wasn't performed.
-        """
-        if not hasattr(self, 'cv_results') or not self.cv_results.get('cv_scores'):
-            return None
-        
-        return self.cv_results['cv_scores']
-        
 class GeneralPipeline(Evaluate):
     """
     General pipeline for PyTorch models supporting classification and regression.
@@ -726,7 +719,7 @@ class GeneralPipeline(Evaluate):
         
         # Convert to tensor and move to device
         weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(self.device)
-        print(f"Computed class weights: {dict(zip(unique_classes, class_weights))}")
+        logger.info("Computed class weights: %s", dict(zip(unique_classes, class_weights)))
         return weights_tensor
 
     def _create_loss_function(self) -> Callable:
@@ -743,7 +736,7 @@ class GeneralPipeline(Evaluate):
                         return loss_class(weight=self.class_weights)
                     except TypeError:
                         # If weight parameter not supported, create without weights
-                        print(f"Warning: {self.loss_fn} does not support weight parameter, using without weights")
+                        logger.warning("%s does not support weight parameter, using without weights", self.loss_fn)
                         return loss_class()
                 else:
                     return loss_class()
@@ -757,7 +750,7 @@ class GeneralPipeline(Evaluate):
                     return nn.CrossEntropyLoss(weight=self.class_weights)
                 else:
                     # For other loss functions, return original
-                    print(f"Warning: Loss function {type(self.loss_fn).__name__} does not support weight parameter")
+                    logger.warning("Loss function %s does not support weight parameter", type(self.loss_fn).__name__)
                     return self.loss_fn
             else:
                 return self.loss_fn
@@ -787,10 +780,10 @@ class GeneralPipeline(Evaluate):
         fold_scores = []
         fold_weights = []  # Store best weights from each fold
         
-        print(f"Starting {self.k_folds}-fold cross-validation with weight averaging ensemble...")
-        
+        logger.info("Starting %d-fold cross-validation with weight averaging ensemble...", self.k_folds)
+
         for fold, (train_idx, val_idx) in enumerate(cv_iterator):
-            print(f"Training fold {fold + 1}/{self.k_folds}")
+            logger.info("Training fold %d/%d", fold + 1, self.k_folds)
             
             # Reset seeds before each fold for consistency
             self._set_seeds()
@@ -822,20 +815,18 @@ class GeneralPipeline(Evaluate):
             primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
             metric_value = fold_metrics.get(primary_metric)
             if metric_value is not None:
-                print(f"  Fold {fold + 1} {primary_metric}: {metric_value:.4f}")
+                logger.info("  Fold %d %s: %.4f", fold + 1, primary_metric, metric_value)
         
         # Calculate cross-validation statistics
         cv_results = self._compute_cv_statistics(fold_scores)
         self._print_cv_results(cv_results)
         
         # Create ensemble model by averaging weights from all folds
-        print(f"\nCreating ensemble model by averaging weights from {self.k_folds} folds...")
+        logger.info("Creating ensemble model by averaging weights from %d folds...", self.k_folds)
         averaged_weights = self._average_model_weights(fold_weights)
         self._set_model_weights(averaged_weights)
-        
-        print("✅ Ensemble model created successfully!")
-        print("   Model now contains averaged weights from all cross-validation folds")
-        print("   This preserves validation criteria while creating a robust ensemble\n")
+
+        logger.info("Ensemble model created successfully (averaged weights from all CV folds)")
         
         return {
             'cv_scores': cv_results,
@@ -844,30 +835,6 @@ class GeneralPipeline(Evaluate):
             'fold_individual_scores': fold_scores,
             'training_history': self._create_cv_metrics_summary(cv_results, fold_scores)  # Add for compatibility
         }
-    
-    def _create_cv_metrics_summary(self, cv_results: Dict[str, Dict[str, float]], fold_scores: List[Dict[str, float]]) -> List[Dict[str, float]]:
-        """
-        Create a metrics summary compatible with save_metrics function.
-        
-        This converts CV results into a format that can be saved as a DataFrame,
-        providing both summary statistics and individual fold results.
-        """
-        metrics_summary = []
-        
-        # Add overall CV summary as first row
-        summary_row = {'fold': 'CV_MEAN'}
-        for metric, stats in cv_results.items():
-            summary_row[metric] = stats['mean']
-            summary_row[f"{metric}_std"] = stats['std']
-        metrics_summary.append(summary_row)
-        
-        # Add individual fold results
-        for fold_idx, fold_metrics in enumerate(fold_scores):
-            fold_row = {'fold': f'fold_{fold_idx + 1}'}
-            fold_row.update(fold_metrics)
-            metrics_summary.append(fold_row)
-        
-        return metrics_summary
     
     def _evaluate_final_performance(self, X_val: np.ndarray, y_val: np.ndarray) -> Dict[str, float]:
         """Evaluate final performance on validation set after training is complete."""
@@ -909,57 +876,14 @@ class GeneralPipeline(Evaluate):
             metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
             try:
                 metrics[metric_key] = metric(targets, preds)
-            except:
+            except (ValueError, TypeError, IndexError):
+                metrics[metric_key] = 0.0
+            except Exception as e:
+                logger.warning("Unexpected error computing metric %s: %s", metric_key, e)
                 metrics[metric_key] = 0.0
         
         return metrics
     
-    def _compute_cv_statistics(self, fold_scores: List[Dict[str, float]]) -> Dict[str, Dict[str, float]]:
-        """Compute cross-validation statistics (mean ± std) for each metric."""
-        if not fold_scores:
-            return {}
-        
-        # Get all metrics
-        all_metrics = set()
-        for scores in fold_scores:
-            all_metrics.update(scores.keys())
-        
-        cv_stats = {}
-        for metric in all_metrics:
-            metric_values = [scores.get(metric) for scores in fold_scores]
-            metric_array = np.array([v if v is not None else np.nan for v in metric_values], dtype=float)
-            cv_stats[metric] = {
-                'mean': float(np.nanmean(metric_array)),
-                'std': float(np.nanstd(metric_array)),
-                'values': metric_array.tolist()
-            }
-        
-        return cv_stats
-    
-    def _print_cv_results(self, cv_results: Dict[str, Dict[str, float]]):
-        """Print cross-validation results following scikit-learn format."""
-        if not cv_results:
-            return
-        
-        primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
-        
-        print(f"\n{'='*60}")
-        print("CROSS-VALIDATION RESULTS")
-        print(f"{'='*60}")
-        
-        # Print primary metric first
-        if primary_metric in cv_results:
-            stats = cv_results[primary_metric]
-            print(f"🎯 {primary_metric.upper():15s}: {stats['mean']:.4f} ± {stats['std']:.4f}")
-            print()
-        
-        # Print other metrics
-        for metric, stats in sorted(cv_results.items()):
-            if metric != primary_metric:
-                print(f"{metric:15s}: {stats['mean']:.4f} ± {stats['std']:.4f}")
-        
-        print(f"{'='*60}\n")
-
     def _get_model_weights(self) -> Dict[str, torch.Tensor]:
         """Get a deep copy of current model weights."""
         return {name: param.clone().detach().cpu() for name, param in self.model.state_dict().items()}
@@ -1012,9 +936,9 @@ class GeneralPipeline(Evaluate):
                     averaged_weights[param_name] = torch.mean(param_stack, dim=0)
                     averaged_count += 1
                                                 
-        print(f"  Successfully averaged {averaged_count}/{len(param_names)} parameters across {len(fold_weights)} folds")
+        logger.info("  Successfully averaged %d/%d parameters across %d folds", averaged_count, len(param_names), len(fold_weights))
         if non_averaged_count > 0:
-            print(f"  Warning: {non_averaged_count} parameters could not be averaged and used first fold values")
+            logger.warning("  %d parameters could not be averaged and used first fold values", non_averaged_count)
         
         return averaged_weights
 
@@ -1024,6 +948,21 @@ class GeneralPipeline(Evaluate):
         This ensures consistency across all components.
         """
         return select_best_epoch(self.history, self.task_type, metric=self._default_selection_metric())
+
+    def _get_current_selection_metric(self, epoch_metrics: Dict[str, Any]) -> Optional[float]:
+        """Extract the current selection metric value from epoch metrics."""
+        metric_name = self._default_selection_metric()
+        value = epoch_metrics.get(metric_name)
+        if value is None:
+            return None
+        if isinstance(value, float) and np.isnan(value):
+            return None
+        return float(value)
+
+    @staticmethod
+    def _is_metric_improved(current: float, best: float) -> bool:
+        """Check if current metric is better than best (higher is better)."""
+        return current > best
 
     def _reset_model(self):
         """Reset model weights and optimizer for k-fold training."""
@@ -1101,7 +1040,7 @@ class GeneralPipeline(Evaluate):
         if has_custom_fit:
             # For models with custom fit methods (like HuggingFace wrappers),
             # delegate training to the model itself
-            print("Using model's custom training method")
+            logger.info("Using model's custom training method")
             
             # Pass through relevant training parameters
             fit_kwargs = {
@@ -1124,7 +1063,7 @@ class GeneralPipeline(Evaluate):
         
         # Standard PyTorch training loop for regular nn.Module models
         if self.use_kfold:
-            print(f"Starting {self.k_folds}-fold cross-validation with weight averaging ensemble")
+            logger.info("Starting %d-fold cross-validation with weight averaging ensemble", self.k_folds)
             results = self._kfold_fit(X, y)
             self.cv_results = results  # Store for later access
             
@@ -1132,13 +1071,6 @@ class GeneralPipeline(Evaluate):
             return results.get('training_history', [])
         else:
             # Single train/validation split
-            import sys
-            import os
-            # Add the parent directory to path to import from utils
-            sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-            from utils.data import train_val_test_split
-            
-            # Use train_val_test_split function
             if self.task_type == "classification":
                 X_train, X_val, _, y_train, y_val, _ = train_val_test_split(
                     X, y, val_size=0.2, test_size=0, stratify=y, random_state=self.random_state
@@ -1170,7 +1102,7 @@ class GeneralPipeline(Evaluate):
         best_weights = None
         patience = 0
         best_epoch = 0  # Track which epoch was selected as best
-        epoch_weights = []  # Store weights from each epoch for post-training selection
+        best_metric_value = None  # Track best metric for live weight selection
         best_val_loss = float('inf')  # For validation loss early stopping
         
         for epoch in range(self.epochs):
@@ -1250,7 +1182,10 @@ class GeneralPipeline(Evaluate):
                     metric_key = getattr(metric, 'name', None) or getattr(metric, '__name__', None) or str(metric)
                     try:
                         extra_metrics[metric_key] = metric(targets, preds)
-                    except Exception:
+                    except (ValueError, TypeError, IndexError):
+                        extra_metrics[metric_key] = 0.0
+                    except Exception as e:
+                        logger.warning("Unexpected error computing metric %s: %s", metric_key, e)
                         extra_metrics[metric_key] = 0.0
                 
                 # Store raw scores in history - selection logic will be applied post-training
@@ -1265,7 +1200,7 @@ class GeneralPipeline(Evaluate):
                         patience += 1
                     
                     if patience >= self.early_stopping:
-                        print(f"Early stopping at epoch {epoch+1} due to validation loss plateau")
+                        logger.info("Early stopping at epoch %d due to validation loss plateau", epoch + 1)
                         break
             
             # Print progress
@@ -1281,7 +1216,7 @@ class GeneralPipeline(Evaluate):
                     progress_str += f", PR-AUC: {current_pr_auc:.4f}"
             elif self.task_type == "regression" and current_r2 is not None:
                 progress_str += f", R²: {current_r2:.4f}"
-            print(progress_str)
+            logger.info(progress_str)
             
             if self.scheduler:
                 self.scheduler.step()
@@ -1297,19 +1232,21 @@ class GeneralPipeline(Evaluate):
             epoch_metrics.update(extra_metrics)
             self.history.append(epoch_metrics)
             
-            # Store weights from this epoch for potential selection later
-            epoch_weights.append({name: param.clone().detach().cpu() for name, param in self.model.state_dict().items()})
-        
-        # Post-training: Apply selection logic to determine best epoch and weights
-        if self.history and epoch_weights:
-            best_epoch = self._select_best_epoch()
-            print(f"Selected best epoch: {best_epoch + 1} based on selection metric")
-            
-            # Use weights from the selected best epoch
-            if best_epoch < len(epoch_weights):
-                best_weights = epoch_weights[best_epoch]
-            else:
-                best_weights = epoch_weights[-1]  # Fallback to last epoch
+            # Live best-weight tracking: keep only the best weights to avoid O(epochs) memory
+            current_metric_value = self._get_current_selection_metric(epoch_metrics)
+            if current_metric_value is not None:
+                is_better = (best_metric_value is None) or self._is_metric_improved(current_metric_value, best_metric_value)
+                if is_better:
+                    best_metric_value = current_metric_value
+                    best_epoch = epoch
+                    best_weights = {name: param.clone().detach().cpu() for name, param in self.model.state_dict().items()}
+            elif best_weights is None:
+                # No metric available yet (e.g., no val set); keep latest weights
+                best_weights = {name: param.clone().detach().cpu() for name, param in self.model.state_dict().items()}
+                best_epoch = epoch
+
+        if best_weights is not None:
+            logger.info("Selected best epoch: %d based on selection metric", best_epoch + 1)
         
         # Restore best weights after training
         if best_weights is not None:
@@ -1319,42 +1256,18 @@ class GeneralPipeline(Evaluate):
         
         # Save model after training if requested
         self.save_model_after_training()
-        
+
+        # Release GPU memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         # Return full history (list of dicts)
         return self.history
-
-    def get_training_history(self) -> List[Dict[str, float]]:
-        """
-        Get training history in format compatible with save_metrics function.
-        
-        Returns:
-            List of dictionaries with epoch-by-epoch or fold-by-fold metrics
-        """
-        if hasattr(self, 'cv_results') and self.cv_results and self.use_kfold:
-            # Return CV-compatible format
-            return self.cv_results.get('training_history', [])
-        else:
-            # Return original epoch-by-epoch history
-            return self.history
-
-    def get_cv_scores(self) -> Optional[Dict[str, Dict[str, float]]]:
-        """
-        Get cross-validation scores summary.
-        
-        Returns:
-            Dictionary with mean, std, and individual values for each metric,
-            or None if CV wasn't performed.
-        """
-        if not hasattr(self, 'cv_results') or not self.cv_results.get('cv_scores'):
-            return None
-        
-        return self.cv_results['cv_scores']
-
 
     def save_to_huggingface(self, repo_name: Optional[str] = None, token: Optional[str] = None) -> None:
         """Save model to HuggingFace Hub."""
         if not self.save_to_hf:
-            print("save_to_hf is False. Set save_to_hf=True in __init__ to enable HuggingFace saving.")
+            logger.warning("save_to_hf is False. Set save_to_hf=True in __init__ to enable HuggingFace saving.")
             return
         
         repo_name = repo_name or self.hf_repo_name
@@ -1401,13 +1314,12 @@ class GeneralPipeline(Evaluate):
                     repo_type="model"
                 )
                 
-            print(f"Model uploaded to HuggingFace Hub: {repo_name}")
-            
+            logger.info("Model uploaded to HuggingFace Hub: %s", repo_name)
+
         except ImportError as e:
-            print(f"Error: {e}")
-            print("Install required packages: pip install transformers huggingface_hub")
+            logger.error("Missing dependency: %s. Install: pip install transformers huggingface_hub", e)
         except Exception as e:
-            print(f"Error uploading to HuggingFace Hub: {e}")
+            logger.error("Error uploading to HuggingFace Hub: %s", e)
 
     def save_model_after_training(self) -> None:
         """Save model after training is complete."""
