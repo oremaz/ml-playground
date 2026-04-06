@@ -1,13 +1,14 @@
+import logging
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Dict, Callable, Any, Optional, Sequence
+from typing import Dict, Callable, Any, Optional
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import xgboost as xgb
 import lightgbm as lgb
 from sklearn.multioutput import MultiOutputRegressor
 
-from third_party import load_class, resolve_repo_path
+logger = logging.getLogger(__name__)
 
 # --- MLPs ---
 class TorchMLP(nn.Module):
@@ -38,306 +39,117 @@ class TorchMLPRegressor(TorchMLP):
     def __init__(self, input_dim: int, output_dim: int = 1, hidden_dims: list = [256, 128, 64], dropout: float = 0.3, batchnorm: bool = False):
         super().__init__(input_dim, hidden_dims, output_dim, dropout, batchnorm)
 
-# --- RandomForest Wrapper ---
-class SklearnRandomForestClassifierWrapper:
-    """
-    Wrapper for sklearn RandomForestClassifier to be compatible with GeneralPipeline.
-    """
-    def __init__(self, **kwargs):
-        self.model = RandomForestClassifier(**kwargs)
-    def to(self, device):
-        return self  # For compatibility
-    def fit(self, X, y, *args, **kwargs):
-        self.model.fit(X, y)
-    def eval(self):
-        pass
-    def train(self):
-        pass
-    def predict(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        predictions = self.model.predict(X)
-        # Diagnostic stats
-        unique_preds, counts = np.unique(predictions, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
-        return predictions
-    def predict_proba(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        probs = self.model.predict_proba(X)
-        # Diagnostic stats
-        predicted_classes = np.argmax(probs, axis=1)
-        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
-        print(f"   Probability stats - min: {probs.min():.4f}, max: {probs.max():.4f}, mean: {probs.mean():.4f}")
-        return probs
-    def __call__(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        proba = self.model.predict_proba(X)
-        return torch.tensor(proba, dtype=torch.float32)
+# --- Sklearn Model Wrapper Base ---
+class SklearnModelWrapper:
+    """Base wrapper making any sklearn model compatible with GeneralPipeline."""
 
-# --- RandomForest Regressor Wrapper ---
-class SklearnRandomForestRegressorWrapper:
-    """
-    Wrapper for sklearn RandomForestRegressor to be compatible with GeneralPipelineSklearn for regression.
-    """
-    def __init__(self, **kwargs):
-        self.model = RandomForestRegressor(**kwargs)
-    def to(self, device):
-        return self  # For compatibility
-    def fit(self, X, y, *args, **kwargs):
-        self.model.fit(X, y)
-    def eval(self):
-        pass
-    def train(self):
-        pass
-    def predict(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        predictions = self.model.predict(X)
-        # Diagnostic stats
-        print(f"🔍 [{self.__class__.__name__}] Predictions - min: {predictions.min():.4f}, max: {predictions.max():.4f}, mean: {predictions.mean():.4f}, std: {predictions.std():.4f}")
-        return predictions
-    def __call__(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        preds = self.model.predict(X)
-        return torch.tensor(preds, dtype=torch.float32)
+    def __init__(self, sklearn_cls, **kwargs):
+        self.model = sklearn_cls(**kwargs)
 
-# --- XGBoost Wrappers ---
-class XGBoostClassifierWrapper:
-    """
-    Wrapper for XGBoost Classifier to be compatible with GeneralPipeline.
-    """
-    def __init__(self, **kwargs):
-        self.model = xgb.XGBClassifier(**kwargs)
-    
     def to(self, device):
-        return self  # For compatibility
-    
-    def fit(self, X, y, *args, **kwargs):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        if isinstance(y, torch.Tensor):
-            y = y.cpu().numpy()
-        sample_weight = kwargs.get('sample_weight', None)
-        if sample_weight is not None:
-            self.model.fit(X, y, sample_weight=sample_weight)
-        else:
-            self.model.fit(X, y)
-    
-    def eval(self):
-        pass
-    
-    def train(self):
-        pass
-    
-    def predict(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        predictions = self.model.predict(X)
-        # Diagnostic stats
-        unique_preds, counts = np.unique(predictions, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
-        return predictions
-    
-    def predict_proba(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        probs = self.model.predict_proba(X)
-        # Diagnostic stats
-        predicted_classes = np.argmax(probs, axis=1)
-        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
-        print(f"   Probability stats - min: {probs.min():.4f}, max: {probs.max():.4f}, mean: {probs.mean():.4f}")
-        return probs
-    
-    def __call__(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        proba = self.model.predict_proba(X)
-        return torch.tensor(proba, dtype=torch.float32)
-
-class XGBoostRegressorWrapper:
-    """
-    Wrapper for XGBoost Regressor to be compatible with GeneralPipeline.
-    """
-    def __init__(self, **kwargs):
-        self.model = xgb.XGBRegressor(**kwargs)
-    
-    def to(self, device):
-        return self  # For compatibility
-    
-    def fit(self, X, y, *args, **kwargs):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        if isinstance(y, torch.Tensor):
-            y = y.cpu().numpy()
-        self.model.fit(X, y)
-    
-    def eval(self):
-        pass
-    
-    def train(self):
-        pass
-    
-    def predict(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        predictions = self.model.predict(X)
-        # Diagnostic stats
-        print(f"🔍 [{self.__class__.__name__}] Predictions - min: {predictions.min():.4f}, max: {predictions.max():.4f}, mean: {predictions.mean():.4f}, std: {predictions.std():.4f}")
-        return predictions
-    
-    def __call__(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        preds = self.model.predict(X)
-        return torch.tensor(preds, dtype=torch.float32)
-
-# --- LightGBM Wrappers ---
-class LightGBMClassifierWrapper:
-    """
-    Wrapper for LightGBM Classifier to be compatible with GeneralPipeline.
-    """
-    def __init__(self, **kwargs):
-        self.model = lgb.LGBMClassifier(**kwargs)
-    
-    def to(self, device):
-        return self  # For compatibility
-    
-    def fit(self, X, y, *args, **kwargs):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        if isinstance(y, torch.Tensor):
-            y = y.cpu().numpy()
-        sample_weight = kwargs.get('sample_weight', None)
-        if sample_weight is not None:
-            self.model.fit(X, y, sample_weight=sample_weight)
-        else:
-            self.model.fit(X, y)
-    
-    def eval(self):
-        pass
-    
-    def train(self):
-        pass
-    
-    def predict(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        predictions = self.model.predict(X)
-        # Diagnostic stats
-        unique_preds, counts = np.unique(predictions, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
-        return predictions
-    
-    def predict_proba(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        probs = self.model.predict_proba(X)
-        # Diagnostic stats
-        predicted_classes = np.argmax(probs, axis=1)
-        unique_preds, counts = np.unique(predicted_classes, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
-        print(f"   Probability stats - min: {probs.min():.4f}, max: {probs.max():.4f}, mean: {probs.mean():.4f}")
-        return probs
-    
-    def __call__(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        proba = self.model.predict_proba(X)
-        return torch.tensor(proba, dtype=torch.float32)
-
-
-class LightGBMRegressorWrapper:
-    """
-    Wrapper for LightGBM Regressor to be compatible with GeneralPipeline.
-    Uses MultiOutputRegressor to handle multi-target regression.
-    """
-    def __init__(self, **kwargs):
-        # Instantiate the base LGBMRegressor with any provided arguments
-        base_estimator = lgb.LGBMRegressor(**kwargs)
-        # Wrap it with MultiOutputRegressor to handle multiple outputs
-        self.model = MultiOutputRegressor(estimator=base_estimator)
-    
-    def to(self, device):
-        """
-        Compatibility method for the pipeline. Does nothing for scikit-learn models.
-        """
         return self
-    
+
+    def eval(self):
+        pass
+
+    def train(self):
+        pass
+
     def fit(self, X, y, *args, **kwargs):
-        """
-        Fits the model. Converts tensors to numpy arrays if necessary.
-        Handles 1D labels by reshaping them to 2D for MultiOutputRegressor.
-        """
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        if isinstance(y, torch.Tensor):
-            y = y.cpu().numpy()
-        
-        # MultiOutputRegressor requires 2D labels (n_samples, n_outputs)
-        # If labels are 1D, reshape to 2D with shape (n_samples, 1)
+        X, y = self._to_numpy(X), self._to_numpy(y)
+        sample_weight = kwargs.get('sample_weight')
+        if sample_weight is not None:
+            self.model.fit(X, y, sample_weight=sample_weight)
+        else:
+            self.model.fit(X, y)
+
+    def predict(self, X):
+        X = self._to_numpy(X)
+        predictions = self.model.predict(X)
+        logger.debug("[%s] predict shape=%s", self.__class__.__name__, np.asarray(predictions).shape)
+        return predictions
+
+    def predict_proba(self, X):
+        X = self._to_numpy(X)
+        probs = self.model.predict_proba(X)
+        logger.debug("[%s] predict_proba shape=%s", self.__class__.__name__, np.asarray(probs).shape)
+        return probs
+
+    def __call__(self, X):
+        X = self._to_numpy(X)
+        if hasattr(self.model, 'predict_proba'):
+            return torch.tensor(self.model.predict_proba(X), dtype=torch.float32)
+        return torch.tensor(self.model.predict(X), dtype=torch.float32)
+
+    @staticmethod
+    def _to_numpy(data):
+        return data.cpu().numpy() if isinstance(data, torch.Tensor) else data
+
+
+class SklearnRandomForestClassifierWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        super().__init__(RandomForestClassifier, **kwargs)
+
+
+class SklearnRandomForestRegressorWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        super().__init__(RandomForestRegressor, **kwargs)
+
+
+class XGBoostClassifierWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        super().__init__(xgb.XGBClassifier, **kwargs)
+
+
+class XGBoostRegressorWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        super().__init__(xgb.XGBRegressor, **kwargs)
+
+
+class LightGBMClassifierWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        super().__init__(lgb.LGBMClassifier, **kwargs)
+
+
+class LightGBMRegressorWrapper(SklearnModelWrapper):
+    """LightGBM regressor wrapped in MultiOutputRegressor for multi-target support."""
+
+    def __init__(self, **kwargs):
+        super().__init__(lgb.LGBMRegressor, **kwargs)
+        # Re-wrap the inner model with MultiOutputRegressor
+        self.model = MultiOutputRegressor(estimator=self.model)
+
+    def fit(self, X, y, *args, **kwargs):
+        X, y = self._to_numpy(X), self._to_numpy(y)
         if y.ndim == 1:
             y = y.reshape(-1, 1)
-        
         self.model.fit(X, y)
 
     def predict(self, X):
-        """
-        Makes predictions. Converts input tensor to numpy and output back to tensor.
-        """
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        
+        X = self._to_numpy(X)
         preds = self.model.predict(X)
-        
-        # Diagnostic stats
-        if preds.ndim == 1:
-            print(f"🔍 [{self.__class__.__name__}] Predictions - min: {preds.min():.4f}, max: {preds.max():.4f}, mean: {preds.mean():.4f}, std: {preds.std():.4f}")
-        else:
-            print(f"🔍 [{self.__class__.__name__}] Predictions shape: {preds.shape}, mean per output: {preds.mean(axis=0)}")
-        
+        logger.debug("[%s] predict shape=%s", self.__class__.__name__, np.asarray(preds).shape)
         return torch.tensor(preds, dtype=torch.float32)
 
-    def __call__(self, X):
-        """
-        Allows the instance to be called like a function, e.g., model(X).
-        """
-        return self.predict(X)
-# --- RandomForest Regressor Wrapper ---
-class SklearnRandomForestRegressorWrapper:
-    """
-    Wrapper for sklearn RandomForestRegressor to be compatible with GeneralPipeline for regression.
-    """
+class TabICLClassifierWrapper(SklearnModelWrapper):
     def __init__(self, **kwargs):
-        self.model = RandomForestRegressor(**kwargs)
-    def to(self, device):
-        return self  # For compatibility
+        from tabicl import TabICLClassifier
+        super().__init__(TabICLClassifier, **kwargs)
+
     def fit(self, X, y, *args, **kwargs):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        if isinstance(y, torch.Tensor):
-            y = y.cpu().numpy()
-        self.model.fit(X, y)
-    def eval(self):
-        pass
-    def train(self):
-        pass
-    def predict(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        predictions = self.model.predict(X)
-        # Diagnostic stats
-        print(f"🔍 [{self.__class__.__name__}] Predictions - min: {predictions.min():.4f}, max: {predictions.max():.4f}, mean: {predictions.mean():.4f}, std: {predictions.std():.4f}")
-        return predictions
-    def __call__(self, X):
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-        preds = self.model.predict(X)
-        return torch.tensor(preds, dtype=torch.float32)
+        kwargs.pop('sample_weight', None)
+        super().fit(X, y, *args, **kwargs)
+
+
+class TabICLRegressorWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        from tabicl import TabICLRegressor
+        super().__init__(TabICLRegressor, **kwargs)
+
+    def fit(self, X, y, *args, **kwargs):
+        kwargs.pop('sample_weight', None)
+        super().fit(X, y, *args, **kwargs)
+
 
 class LlamaCppClassifier:
     """
@@ -398,7 +210,7 @@ class LlamaCppClassifier:
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item()
-            print(f"Epoch {epoch+1} loss: {total_loss/len(prompts):.4f}")
+            logger.info("Epoch %d loss: %.4f", epoch + 1, total_loss / len(prompts))
 
     def predict(self, prompts):
         """
@@ -421,9 +233,9 @@ class LlamaCppClassifier:
         preds_array = np.array(preds)
         if self.task_type == 'classification':
             unique_preds, counts = np.unique(preds_array, return_counts=True)
-            print(f"🔍 [{self.__class__.__name__}] Prediction distribution: {dict(zip(unique_preds, counts))}")
+            logger.debug("[%s] Prediction distribution: %s", self.__class__.__name__, dict(zip(unique_preds, counts)))
         else:
-            print(f"🔍 [{self.__class__.__name__}] Predictions - min: {preds_array.min():.4f}, max: {preds_array.max():.4f}, mean: {preds_array.mean():.4f}, std: {preds_array.std():.4f}")
+            logger.debug("[%s] Predictions - min: %.4f, max: %.4f, mean: %.4f, std: %.4f", self.__class__.__name__, preds_array.min(), preds_array.max(), preds_array.mean(), preds_array.std())
         
         return preds
 
@@ -447,8 +259,8 @@ class LlamaCppClassifier:
         probs_array = np.array(probs)
         predicted_classes = np.argmax(probs_array, axis=1)
         unique_preds, counts = np.unique(predicted_classes, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
-        print(f"   Probability stats - min: {probs_array.min():.4f}, max: {probs_array.max():.4f}, mean: {probs_array.mean():.4f}")
+        logger.debug("[%s] predict_proba class distribution: %s", self.__class__.__name__, dict(zip(unique_preds, counts)))
+        logger.debug("   Probability stats - min: %.4f, max: %.4f, mean: %.4f", probs_array.min(), probs_array.max(), probs_array.mean())
         
         return probs
 
@@ -491,11 +303,11 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             # Check compute capability for bfloat16 support (Ampere and newer = 8.0+)
             compute_capability = torch.cuda.get_device_capability()[0]
             torch_dtype = torch.bfloat16 if compute_capability >= 8 else torch.float16
-            print(f"Using GPU with compute capability {compute_capability}.x - dtype: {torch_dtype}")
+            logger.info("Using GPU with compute capability %d.x - dtype: %s", compute_capability, torch_dtype)
         except Exception:
             # Default to float16 for older GPUs
             torch_dtype = torch.float16
-            print(f"Using GPU with default dtype: {torch_dtype}")
+            logger.info("Using GPU with default dtype: %s", torch_dtype)
             
         # Try to set up quantization config with proper error handling
         bnb_config = None
@@ -508,19 +320,17 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                     bnb_4bit_use_double_quant=True,  # Double quantization for additional memory savings
                     bnb_4bit_compute_dtype=torch_dtype,
                 )
-                print("4-bit quantization enabled with NF4")
+                logger.info("4-bit quantization enabled with NF4")
             except Exception as e:
-                print(f"Warning: Failed to setup quantization config: {e}")
-                print("Falling back to non-quantized model loading on GPU.")
+                logger.warning("Failed to setup quantization config: %s. Falling back to non-quantized model.", e)
                 bnb_config = None
         elif quantization_config is not None:
             try:
                 from transformers import BitsAndBytesConfig
                 bnb_config = BitsAndBytesConfig(**quantization_config)
-                print("Custom quantization config applied")
+                logger.info("Custom quantization config applied")
             except Exception as e:
-                print(f"Warning: Failed to setup custom quantization config: {e}")
-                print("Falling back to non-quantized model loading on GPU.")
+                logger.warning("Failed to setup custom quantization config: %s. Falling back to non-quantized model.", e)
                 bnb_config = None
             
         # Prepare model loading kwargs - always use GPU
@@ -595,7 +405,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             metadata['label_classes'] = self.label_encoder.classes_.tolist()
         with open(os.path.join(save_directory, 'wrapper_metadata.json'), 'w') as f:
             json.dump(metadata, f)
-        print(f"PEFT model, tokenizer, and metadata saved to {save_directory}")
+        logger.info("PEFT model, tokenizer, and metadata saved to %s", save_directory)
         
     def fit(self, X, y, *args, **kwargs):
         """
@@ -621,7 +431,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                 y = label_encoder.fit_transform(y)
                 # Store the encoder for later use in predict
                 self.label_encoder = label_encoder
-                print(f"Label encoding: {dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))}")
+                logger.info("Label encoding: %s", dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_))))
             
             y = y.astype(int).tolist()
         elif hasattr(y, 'tolist'):
@@ -631,7 +441,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                 label_encoder = LabelEncoder()
                 y = label_encoder.fit_transform(y).tolist()
                 self.label_encoder = label_encoder
-                print(f"Label encoding: {dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))}")
+                logger.info("Label encoding: %s", dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_))))
             # Flatten if nested
             elif isinstance(y[0], (list, np.ndarray)):
                 y = [int(item[0] if isinstance(item, (list, np.ndarray)) else item) for item in y]
@@ -714,7 +524,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                         'loss': latest_log.get('loss', 0.0),
                     }
                     training_history.append(epoch_metrics)
-                    print(f"Epoch {int(state.epoch)}/{num_epochs} - Loss: {epoch_metrics['loss']:.4f}")
+                    logger.info("Epoch %d/%d - Loss: %.4f", int(state.epoch), num_epochs, epoch_metrics['loss'])
         
         # Create trainer with standard Trainer (not SFTTrainer)
         trainer = Trainer(
@@ -750,21 +560,20 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             
             # Diagnostic stats - check BEFORE decoding
             unique_preds_raw, counts_raw = np.unique(predictions, return_counts=True)
-            print(f"🔍 [{self.__class__.__name__}] Raw prediction indices: {dict(zip(unique_preds_raw, counts_raw))}")
+            logger.debug("[%s] Raw prediction indices: %s", self.__class__.__name__, dict(zip(unique_preds_raw, counts_raw)))
             if len(unique_preds_raw) == 1:
-                print(f"⚠️  WARNING: All {len(predictions)} predictions are class index {unique_preds_raw[0]}")
-                print(f"   Sample probabilities (first 3): {probs[:3]}")
-            
+                logger.warning("All %d predictions are class index %s", len(predictions), unique_preds_raw[0])
+                logger.debug("   Sample probabilities (first 3): %s", probs[:3])
+
             # Decode predictions if label encoder exists
             if hasattr(self, 'label_encoder') and self.label_encoder is not None:
                 try:
                     predictions = self.label_encoder.inverse_transform(predictions)
                     # Diagnostic stats after decoding
                     unique_preds_decoded, counts_decoded = np.unique(predictions, return_counts=True)
-                    print(f"   Decoded predictions: {dict(zip(unique_preds_decoded, counts_decoded))}")
+                    logger.debug("   Decoded predictions: %s", dict(zip(unique_preds_decoded, counts_decoded)))
                 except Exception as e:
-                    print(f"⚠️  Label decoding failed: {e}")
-                    pass
+                    logger.warning("Label decoding failed: %s", e)
             
             return predictions
         else:
@@ -792,7 +601,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             
             result = np.array(predictions)
             # Diagnostic stats
-            print(f"🔍 [{self.__class__.__name__}] Predictions - min: {result.min():.4f}, max: {result.max():.4f}, mean: {result.mean():.4f}, std: {result.std():.4f}")
+            logger.debug("[%s] Predictions - min: %.4f, max: %.4f, mean: %.4f, std: %.4f", self.__class__.__name__, result.min(), result.max(), result.mean(), result.std())
             return result
                 
     def predict_proba(self, X):
@@ -837,11 +646,11 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         # Diagnostic stats
         predicted_classes = np.argmax(result, axis=1)
         unique_preds, counts = np.unique(predicted_classes, return_counts=True)
-        print(f"🔍 [{self.__class__.__name__}] predict_proba - Class distribution from argmax: {dict(zip(unique_preds, counts))}")
+        logger.debug("[%s] predict_proba class distribution: %s", self.__class__.__name__, dict(zip(unique_preds, counts)))
         if len(unique_preds) == 1:
-            print(f"⚠️  WARNING: All {len(result)} probabilities lead to class {unique_preds[0]}")
-            print(f"   Sample probabilities (first 3): {result[:3]}")
-        print(f"   Probability stats - min: {result.min():.4f}, max: {result.max():.4f}, mean: {result.mean():.4f}")
+            logger.warning("All %d probabilities lead to class %s", len(result), unique_preds[0])
+            logger.debug("   Sample probabilities (first 3): %s", result[:3])
+        logger.debug("   Probability stats - min: %.4f, max: %.4f, mean: %.4f", result.min(), result.max(), result.mean())
         
         return result
         
@@ -884,298 +693,6 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         )
 
 
-class ThirdPartyTabularModel(nn.Module):
-    """Generic nn.Module wrapper for third-party tabular research models."""
-
-    def __init__(
-        self,
-        repo_name: str,
-        class_name: str,
-        *,
-        repo_path: Optional[str] = None,
-        env_var: Optional[str] = None,
-        module_candidates: Optional[Sequence[str]] = None,
-        init_args: Optional[Sequence] = None,
-        init_kwargs: Optional[dict] = None,
-    ) -> None:
-        super().__init__()
-        init_args = tuple(init_args or ())
-        init_kwargs = dict(init_kwargs or {})
-        cls = load_class(
-            repo_name,
-            class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-        )
-        self.inner = cls(*init_args, **init_kwargs)
-
-    def forward(self, *args, **kwargs):  # type: ignore[override]
-        return self.inner(*args, **kwargs)
-
-
-class TabRWrapper(ThirdPartyTabularModel):
-    """Wrapper around the TabR reference implementation (NeurIPS 2024)."""
-
-    def __init__(
-        self,
-        input_dim: int,
-        num_classes: int,
-        *,
-        repo_path: Optional[str] = None,
-        env_var: str = "TABR_REPO",
-        model_kwargs: Optional[dict] = None,
-    ) -> None:
-        nn.Module.__init__(self)
-
-        from importlib.util import module_from_spec, spec_from_file_location
-
-        repo_dir = resolve_repo_path(
-            "tabular-dl-tabr", repo_path=repo_path, env_var=env_var
-        )
-        tabr_entry = repo_dir / "bin" / "tabr.py"
-        if not tabr_entry.exists():
-            raise FileNotFoundError(
-                f"Unable to locate TabR entry point at '{tabr_entry}'."
-            )
-
-        spec = spec_from_file_location("third_party.tabr", tabr_entry)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"Cannot create import spec for '{tabr_entry}'.")
-
-        module = module_from_spec(spec)
-        try:
-            spec.loader.exec_module(module)  # type: ignore[arg-type]
-        except ImportError as exc:
-            raise ImportError(
-                "TabR dependencies are missing. Install the requirements listed in "
-                "tabular-dl-tabr/environment-simple.yaml (faiss, delu, etc.)."
-            ) from exc
-
-        ModelCls = getattr(module, "Model", None)
-        if ModelCls is None:
-            raise ImportError("'Model' class not found in bin/tabr.py")
-
-        kwargs = dict(model_kwargs or {})
-        n_num_features = kwargs.pop("n_num_features", input_dim)
-        n_bin_features = kwargs.pop("n_bin_features", 0)
-        cat_cardinalities = list(kwargs.pop("cat_cardinalities", []))
-        n_classes = kwargs.pop(
-            "n_classes", num_classes if num_classes > 1 else None
-        )
-
-        defaults = {
-            "num_embeddings": None,
-            "d_main": 128,
-            "d_multiplier": 2.0,
-            "encoder_n_blocks": 2,
-            "predictor_n_blocks": 2,
-            "mixer_normalization": "auto",
-            "context_dropout": 0.0,
-            "dropout0": 0.1,
-            "dropout1": "dropout0",
-            "normalization": "LayerNorm",
-            "activation": "ReLU",
-            "memory_efficient": False,
-            "candidate_encoding_batch_size": None,
-        }
-        for key, value in defaults.items():
-            kwargs.setdefault(key, value)
-
-        self.context_size = int(max(1, kwargs.pop("context_size", 32)))
-        self._candidate_x = self._normalize_feature_dict(
-            kwargs.pop("candidate_x", None)
-        )
-        self._candidate_y = kwargs.pop("candidate_y", None)
-        self._is_classification = n_classes is not None
-
-        self.inner = ModelCls(
-            n_num_features=n_num_features,
-            n_bin_features=n_bin_features,
-            cat_cardinalities=cat_cardinalities,
-            n_classes=n_classes,
-            **kwargs,
-        )
-
-    @staticmethod
-    def _normalize_feature_dict(
-        value: Optional[Any],
-    ) -> Optional[dict[str, torch.Tensor]]:
-        if value is None:
-            return None
-        if isinstance(value, dict):
-            return {k: v for k, v in value.items() if v is not None}
-        if isinstance(value, torch.Tensor):
-            return {"num": value}
-        raise TypeError(
-            "TabR candidate features must be provided as a Tensor or a dict of tensors."
-        )
-
-    def set_candidates(
-        self,
-        features: dict[str, torch.Tensor],
-        targets: torch.Tensor,
-    ) -> None:
-        self._candidate_x = self._normalize_feature_dict(features)
-        self._candidate_y = targets
-
-    def forward(self, x: Any) -> torch.Tensor:  # type: ignore[override]
-        features = self._normalize_feature_dict(x)
-        if features is None:
-            raise ValueError("TabRWrapper requires feature tensors to be provided.")
-
-        candidate_x = self._candidate_x or features
-        candidate_y = self._candidate_y
-        if candidate_y is None:
-            representative = next(iter(candidate_x.values()))
-            size = representative.shape[0]
-            dtype = torch.long if self._is_classification else torch.float32
-            candidate_y = torch.zeros(size, dtype=dtype, device=representative.device)
-
-        context_size = max(1, min(self.context_size, candidate_y.shape[0]))
-
-        return self.inner(
-            x_=features,
-            y=None,
-            candidate_x_=candidate_x,
-            candidate_y=candidate_y,
-            context_size=context_size,
-            is_train=False,
-        )
-
-
-class GrandeWrapper(ThirdPartyTabularModel):
-    """Thin wrapper around the official GRANDE TensorFlow model."""
-
-    def __init__(
-        self,
-        input_dim: int,
-        num_classes: int,
-        *,
-        repo_path: Optional[str] = None,
-        env_var: str = "GRANDE_REPO",
-        model_kwargs: Optional[dict] = None,
-    ) -> None:
-        nn.Module.__init__(self)
-
-        kwargs = dict(model_kwargs or {})
-        params = kwargs.pop("params", {})
-        args = kwargs.pop("args", {})
-
-        params_defaults = {
-            "depth": 5,
-            "n_estimators": 512,
-            "learning_rate_weights": 0.01,
-            "learning_rate_index": 0.01,
-            "learning_rate_values": 0.01,
-            "learning_rate_leaf": 0.01,
-            "optimizer": "adam",
-            "cosine_decay_steps": 0,
-            "loss": "crossentropy" if num_classes > 1 else "mse",
-            "focal_loss": False,
-            "temperature": 0.0,
-            "from_logits": True,
-            "use_class_weights": False,
-            "dropout": 0.0,
-            "selected_variables": 1.0,
-            "data_subset_fraction": 1.0,
-            "objective": "classification" if num_classes > 1 else "regression",
-            "random_seed": 42,
-        }
-        params_defaults.update(params)
-
-        args_defaults = {
-            "epochs": 100,
-            "early_stopping_epochs": 20,
-            "batch_size": 64,
-            "cat_idx": kwargs.pop("cat_idx", []),
-            "objective": params_defaults["objective"],
-            "random_seed": params_defaults["random_seed"],
-            "verbose": 0,
-        }
-        args_defaults.update(args)
-
-        GrandeCls = load_class(
-            "grande",
-            "GRANDE",
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=("GRANDE.GRANDE", "GRANDE"),
-        )
-
-        params_defaults.setdefault("num_columns", list(range(input_dim)))
-        params_defaults.setdefault("cat_idx", args_defaults["cat_idx"])
-
-        self.inner = GrandeCls(params=params_defaults, args=args_defaults)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        if self.training:
-            raise RuntimeError("GrandeWrapper currently supports inference only.")
-
-        if not isinstance(x, torch.Tensor):
-            raise TypeError("GrandeWrapper expects a torch.Tensor input.")
-
-        preds = self.inner.predict(x.detach().cpu().numpy())
-        return torch.from_numpy(preds).to(x.device)
-
-
-class TabMWrapper(ThirdPartyTabularModel):
-    """Wrapper around the official TabM implementation."""
-
-    def __init__(
-        self,
-        input_dim: int,
-        num_classes: int,
-        *,
-        repo_path: Optional[str] = None,
-        env_var: str = "TABM_REPO",
-        model_kwargs: Optional[dict] = None,
-    ) -> None:
-        nn.Module.__init__(self)
-
-        kwargs = dict(model_kwargs or {})
-
-        tabm_cls = load_class(
-            "tabm",
-            "TabM",
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=("tabm", "tabm.tabm"),
-        )
-
-        n_num_features = kwargs.pop("n_num_features", input_dim)
-        cat_cardinalities = list(kwargs.pop("cat_cardinalities", []))
-        d_out = kwargs.pop("d_out", num_classes if num_classes > 1 else None)
-        num_embeddings = kwargs.pop("num_embeddings", None)
-
-        defaults = {
-            "k": 16,
-            "n_blocks": 3,
-            "d_block": 512,
-            "dropout": 0.1,
-            "activation": "ReLU",
-            "arch_type": "tabm",
-            "start_scaling_init": None,
-        }
-        for key, value in defaults.items():
-            kwargs.setdefault(key, value)
-
-        if kwargs.pop("use_make", True):
-            self.inner = tabm_cls.make(
-                n_num_features=n_num_features,
-                cat_cardinalities=cat_cardinalities,
-                d_out=d_out,
-                num_embeddings=num_embeddings,
-                **kwargs,
-            )
-        else:
-            self.inner = tabm_cls(
-                n_num_features=n_num_features,
-                cat_cardinalities=cat_cardinalities,
-                d_out=d_out,
-                num_embeddings=num_embeddings,
-                **kwargs,
-            )
 
 
 # --- Registry ---
@@ -1187,9 +704,7 @@ CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
     "lightgbm_classifier": LightGBMClassifierWrapper,
     "hf_qlora_classifier": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
     "llama_cpp_classifier": lambda **kwargs: LlamaCppClassifier(task_type='classification', **kwargs),
-    "tabr_classifier": TabRWrapper,
-    "grande_classifier": GrandeWrapper,
-    "tabm_classifier": TabMWrapper,
+    "tabicl_classifier": TabICLClassifierWrapper,
 }
 
 REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
@@ -1200,6 +715,7 @@ REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
     "lightgbm_regressor": LightGBMRegressorWrapper,
     "hf_qlora_regressor": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='regression', **kwargs),
     "llama_cpp_regressor": lambda **kwargs: LlamaCppClassifier(task_type='regression', **kwargs),
+    "tabicl_regressor": TabICLRegressorWrapper,
 }
 
 # Combined registry for backward compatibility

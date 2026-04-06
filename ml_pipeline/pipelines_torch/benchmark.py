@@ -4,8 +4,11 @@ from tqdm import tqdm
 import random
 import numpy as np
 import torch
+import logging
 from pipelines_torch.base import GeneralPipeline
 from utils.utils import save_model, save_metrics, model_exists
+
+logger = logging.getLogger(__name__)
 
 def set_all_seeds(seed: int):
     """Set random seed for all libraries to ensure reproducibility."""
@@ -152,14 +155,14 @@ class BenchmarkRunner:
                     "k_folds": self.k_folds,
                 }
                 if model_exists(metadata_core, path_start=self.path_start):
-                    print(f"\n✅ Skipping {model_name} | {aug_name} (checkpoint already exists)")
+                    logger.info("Skipping %s | %s (checkpoint already exists)", model_name, aug_name)
                     continue
                 
-                print(f"\nRunning Model: {model_name} | Augmentation: {aug_name}")
+                logger.info("Running Model: %s | Augmentation: %s", model_name, aug_name)
                 # Print class distribution for classification tasks
                 if self.task_type == "classification":
                     unique, counts = np.unique(y, return_counts=True)
-                    print(f"Class distribution: {dict(zip(unique, counts))}")
+                    logger.info("Class distribution: %s", dict(zip(unique, counts)))
                 # Instantiate model
                 model = model_class(**model_params)
                 # Choose loss and optimizer
@@ -221,7 +224,7 @@ class BenchmarkRunner:
                 training_history = pipeline.fit(X, y)
                 # Print class weights if available
                 if self.task_type == "classification" and hasattr(pipeline, 'class_weights') and pipeline.class_weights is not None:
-                    print(f"Computed class weights: {pipeline.class_weights}")
+                    logger.info("Computed class weights: %s", pipeline.class_weights)
                 
                 # Save model weights if specified
                 entry = save_model(pipeline.model, path_start=self.path_start, metadata_core=metadata_core)

@@ -11,11 +11,10 @@ This module provides a unified, extensible framework for training, evaluating, a
 - **GeneralPipelineSklearn**: Sklearn-compatible pipeline for classical models, with augmentation and CV support.
 - **BenchmarkRunner**: Automated grid search over models, augmentations, and metrics; result aggregation and CSV export.
 
-### 🧩 Model Registry & Third-Party Hooks
+### 🧩 Model Registry
 - **Plug-and-play models**: Register and instantiate models by name (`MODEL_REGISTRY`).
-- **Vision models**: Lightweight CNNs, transfer-learning backbones, and official research detectors (FatFormer, DiffusionFake) via wrappers around their public GitHub repos.
-- **Tabular models**: Classic ML baselines, transformer-style MLPs, and official ICLR models (TabR, GRANDE, TabM) through thin adapters.
-- **Third-party loader**: `third_party/__init__.py` provides `load_class` helpers so you can keep upstream repositories as git submodules or point to local clones using environment variables (e.g., `FATFORMER_REPO`, `DIFFUSIONFAKE_REPO`).
+- **Vision models**: Lightweight CNNs, transfer-learning backbones, and timm-based vision models.
+- **Tabular models**: Classic ML baselines and transformer-style MLPs.
 
 ### 🧪 Semi-Supervised Learning Utilities
 - **Vision SSL** (`ss_vision_models.py`): Implements Pseudo-Label, Pi-Model, Mean Teacher, and CDMAD debiasing while keeping hooks compatible with official repositories.
@@ -57,22 +56,21 @@ Models are registered under descriptive keys. The following tables highlight the
 ### Classification Models (`models.py`)
 - `mlp_classifier`, `deep_mlp_classifier`: PyTorch MLPs (configurable depth, batchnorm, dropout)
 - `random_forest_classifier`, `xgboost_classifier`, `lightgbm_classifier`: Classical baselines
-- `tabr_classifier`: Wrapper around the official Yandex TabR implementation (ICLR 2024)
-- `grande_classifier`: Wrapper for the official GRANDE differentiable tree ensemble (ICLR 2024)
-- `tabm_classifier`: Wrapper around the official TabM multi-head ensemble (ICLR 2025)
+- `tabicl_classifier`: TabICL tabular foundation model (sklearn-compatible, `pip install tabicl`)
 - `hf_lora_classifier`, `hf_qlora_classifier`, `llama_cpp_classifier`: Text-oriented adapters
 
 ### Regression Models (`models.py`)
 - `mlp_regressor`, `deep_mlp_regressor`: PyTorch MLPs
 - `random_forest_regressor`, `xgboost_regressor`, `lightgbm_regressor`
+- `tabicl_regressor`: TabICL tabular foundation model for regression
 - `hf_lora_regressor`, `hf_qlora_regressor`, `llama_cpp_regressor`
 
 ### Vision Models (`vision_models.py`)
 - `simple_cnn`, `adaptive_cnn`, `residual_cnn`: Lightweight CNN baselines
-- `resnet50`, `vision_transformer`: Transfer learning/ViT backbones
-- `clip_classifier`, `qwen2_vl_qlora`: Multimodal and large-model adapters
-- `fatformer_official`: Wrapper loading the CVPR 2024 FatFormer implementation via `third_party`
-- `diffusionfake_official`: Wrapper loading the NeurIPS 2024 DiffusionFake detector via `third_party`
+- `resnet50`: Transfer learning backbone
+- `clip_classifier`, `dinov3_classifier`, `qwen2_vl_qlora`: Multimodal and large-model adapters
+- `timm_dinov2_vit_small`, `timm_dinov2_vit_base`, `timm_dinov2_vit_large`: DINOv2 self-supervised ViT backbones (via timm)
+- `timm_convnextv2_tiny`, `timm_efficientnetv2_s`, `timm_vit_base_patch16`, `timm_vit_mae_base`: Other timm backbones
 
 Use `get_model("model_name", ...)` to instantiate any vision model; tabular/text models are accessed via `MODEL_REGISTRY`.
 
@@ -83,27 +81,11 @@ Use `get_model("model_name", ...)` to instantiate any vision model; tabular/text
 ### Vision (`ss_vision_models.py`)
 Provides loss wrappers that can sit on top of any vision backbone:
 - `PseudoLabel`, `PiModel`, `MeanTeacher`: Classical SSL baselines implemented once in `ssl_algorithms.py` and reused across vision and tabular pipelines.
-- `CDMADHook`: Debias pseudo-labels using the official CDMAD repository or a faithful fallback implementation.
 - Hooks return `(supervised_loss, unsupervised_loss, logs)` so you can integrate them into existing training loops.
 
 ### Tabular (`ss_models.py`)
 - `SemiSupervisedTabular`: Wraps any registry model, reusing the shared pseudo-label or Mean Teacher implementations with optional Gaussian-noise augmentation hooks.
 - Designed to operate with the augmentation utilities in `augmentations.py` for minority-class oversampling or consistency regularization.
-
----
-
-## Working with Third-Party Repositories
-
-The project expects official research code to live under `third_party/<RepoName>` (typically as git submodules). Utilities in `third_party/__init__.py` make it easy to load classes/functions without modifying the upstream code.
-
-```python
-from third_party import load_class
-FatFormer = load_class("FatFormer", "FatFormerModel", env_var="FATFORMER_REPO")
-```
-
-You can override locations using environment variables (e.g., `export FATFORMER_REPO=/path/to/FatFormer`). If a repository is missing, the loader raises a helpful error listing searched paths.
-
-Run `git submodule update --init --recursive` (or clone the referenced repos manually) before instantiating any of the official-model adapters.
 
 ---
 
@@ -116,9 +98,9 @@ Run `git submodule update --init --recursive` (or clone the referenced repos man
 from pipelines_torch.models import MODEL_REGISTRY
 model = MODEL_REGISTRY['tabr_classifier'](input_dim=..., num_classes=..., init_kwargs={'k': 32})
 
-# Vision models (including official research detectors)
+# Vision models
 from pipelines_torch.vision_models import get_model
-vision_model = get_model('fatformer_official', num_classes=2)
+vision_model = get_model('resnet50', num_classes=2)
 ```
 
 ### 2. Build a Pipeline
@@ -162,14 +144,12 @@ results_df = runner.run(X, y)
 
 1. Implement your model or wrapper in `models.py` or `vision_models.py`.
 2. Register it in `MODEL_REGISTRY` with a unique key.
-3. (Optional) If pulling from an external repo, add a loader that leverages `third_party.load_class`.
-4. Use it in pipelines, SSL wrappers, or benchmarks by name.
+3. Use it in pipelines, SSL wrappers, or benchmarks by name.
 
 ---
 
 ## Best Practices
 
-- Keep third-party repositories up to date via `git submodule update --init --recursive`.
 - Use k-fold CV for robust evaluation and track metrics consistently.
 - Register all new models and augmentations to keep experiments reproducible.
 - Integrate with semi-supervised utilities when working with partially labeled datasets.

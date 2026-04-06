@@ -1,14 +1,7 @@
 import torch
 import torch.nn as nn
-from typing import Dict, Type, Optional, Sequence, Callable
+from typing import Dict, Type, Optional, Callable
 
-import os
-import sys
-import contextlib
-pkg_root = os.path.dirname(os.path.dirname(__file__))
-if pkg_root not in sys.path:
-    sys.path.insert(0, pkg_root)
-from third_party import load_class, resolve_repo_path
 import timm
 
 class SimpleCNN(nn.Module):
@@ -254,6 +247,52 @@ class CLIPClassifier(nn.Module):
         return logits
 
 
+class DINOv3Classifier(nn.Module):
+    """DINOv3 vision backbone with a linear classification head using Hugging Face transformers.
+
+    DINOv3 models are gated on HuggingFace. Authenticate with ``huggingface-cli login``
+    before using this class.
+    """
+
+    def __init__(
+        self,
+        num_classes: int = 2,
+        model_name: str = "facebook/dinov3-vitl16",
+        input_size: int = 518,
+        freeze_backbone: bool = True,
+    ):
+        super().__init__()
+        try:
+            from transformers import AutoModel, AutoImageProcessor
+        except ImportError:
+            raise ImportError(
+                "transformers is required for DINOv3Classifier. Install with: pip install transformers"
+            )
+
+        self.input_size = input_size
+        self.backbone = AutoModel.from_pretrained(model_name)
+
+        if freeze_backbone:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+
+        hidden_size = self.backbone.config.hidden_size
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, x):
+        if x.shape[-1] != self.input_size or x.shape[-2] != self.input_size:
+            x = torch.nn.functional.interpolate(
+                x, size=(self.input_size, self.input_size),
+                mode='bilinear', align_corners=False,
+            )
+
+        outputs = self.backbone(pixel_values=x)
+        # Use CLS token output
+        pooled = outputs.last_hidden_state[:, 0]
+        logits = self.classifier(pooled)
+        return logits
+
+
 class Qwen2VLQLoRA(nn.Module):
     """QLoRA fine-tuning wrapper for the Qwen 2.5 Vision-Language model."""
 
@@ -300,107 +339,6 @@ class Qwen2VLQLoRA(nn.Module):
         inputs = self.processor(images=images, text=prompts, return_tensors="pt").to(self.model.device)
         output = self.model(**inputs)
         return output.logits[:, -1, : self.num_classes]
-
-
-class ThirdPartyModelWrapper(nn.Module):
-    """Generic wrapper that instantiates a model from a locally cloned research repository."""
-
-    def __init__(
-        self,
-        repo_name: str,
-        class_name: str,
-        *,
-        repo_path: Optional[str] = None,
-        env_var: Optional[str] = None,
-        module_candidates: Optional[Sequence[str]] = None,
-        init_args: Optional[Sequence] = None,
-        init_kwargs: Optional[dict] = None,
-    ) -> None:
-        super().__init__()
-        init_args = tuple(init_args or ())
-        init_kwargs = dict(init_kwargs or {})
-        self._cls = load_class(
-            repo_name,
-            class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-        )
-        # Instantiate inside the repo directory so relative paths in the third-party
-        # code (e.g., 'pretrained/ViT-L-14.pt') resolve correctly.
-        repo_dir = resolve_repo_path(repo_name, repo_path=repo_path, env_var=env_var)
-        cwd = os.getcwd()
-        try:
-            os.chdir(str(repo_dir))
-            try:
-                self.inner = self._cls(*init_args, **init_kwargs)
-            except ModuleNotFoundError as e:
-                # Provide a clearer hint for common optional deps
-                raise
-        finally:
-            with contextlib.suppress(Exception):
-                os.chdir(cwd)
-
-    def forward(self, *args, **kwargs):  # type: ignore[override]
-        return self.inner(*args, **kwargs)
-
-
-class FatFormerOfficial(ThirdPartyModelWrapper):
-    """Wrapper around the official FatFormer implementation (CVPR 2024)."""
-
-    def __init__(
-        self,
-        num_classes: int = 2,
-        *,
-        repo_path: Optional[str] = None,
-        class_name: str = "CLIPModel",
-        module_candidates: Optional[Sequence[str]] = (
-            "FatFormer.models.clip_models",
-            "models.clip_models",
-        ),
-        model_kwargs: Optional[dict] = None,
-        env_var: str = "FATFORMER_REPO",
-        clip_variant: str = "ViT-L/14",
-        num_context_embedding: int = 8,
-        init_context_embedding: str = "",
-        num_vit_adapter: int = 8,
-    ) -> None:
-        kwargs = dict(model_kwargs or {})
-
-        # Allow overrides via model_kwargs while guarding against unexpected
-        # arguments being forwarded to the third-party constructor.
-        clip_variant = kwargs.pop("clip_variant", clip_variant)
-        from types import SimpleNamespace
-
-        args_namespace = kwargs.pop("args", None)
-        if args_namespace is None:
-            args_namespace = SimpleNamespace(
-                num_context_embedding=kwargs.pop("num_context_embedding", num_context_embedding),
-                init_context_embedding=kwargs.pop("init_context_embedding", init_context_embedding),
-                num_vit_adapter=kwargs.pop("num_vit_adapter", num_vit_adapter),
-                num_classes=num_classes,
-            )
-        else:
-            if num_classes is not None and not hasattr(args_namespace, "num_classes"):
-                setattr(args_namespace, "num_classes", num_classes)
-            if not hasattr(args_namespace, "num_context_embedding"):
-                setattr(args_namespace, "num_context_embedding", kwargs.pop("num_context_embedding", num_context_embedding))
-            if not hasattr(args_namespace, "init_context_embedding"):
-                setattr(args_namespace, "init_context_embedding", kwargs.pop("init_context_embedding", init_context_embedding))
-            if not hasattr(args_namespace, "num_vit_adapter"):
-                setattr(args_namespace, "num_vit_adapter", kwargs.pop("num_vit_adapter", num_vit_adapter))
-
-        kwargs.setdefault("name", kwargs.pop("name", clip_variant))
-        kwargs["args"] = args_namespace
-
-        super().__init__(
-            "FatFormer",
-            class_name,
-            repo_path=repo_path,
-            env_var=env_var,
-            module_candidates=module_candidates,
-            init_kwargs=kwargs,
-        )
 
 
 class TimmVisionModel(nn.Module):
@@ -507,8 +445,8 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
         "xception", registry_name="xception"
     ),
     "clip_classifier": CLIPClassifier,
+    "dinov3_classifier": DINOv3Classifier,
     "qwen2_vl_qlora": Qwen2VLQLoRA,
-    "fatformer_official": FatFormerOfficial,
     # Modern timm-based backbones for vision benchmarks
     "timm_convnextv2_tiny": _register_timm_model(
         "convnextv2_tiny.fcmae_ft_in1k", registry_name="convnextv2_tiny"
@@ -522,6 +460,16 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     ),
     "timm_vit_mae_base": _register_timm_model(
         "vit_base_patch16_224.mae", registry_name="vit_mae_base"
+    ),
+    # DINOv2 self-supervised ViT backbones
+    "timm_dinov2_vit_small": _register_timm_model(
+        "vit_small_patch14_dinov2", registry_name="dinov2_vit_small"
+    ),
+    "timm_dinov2_vit_base": _register_timm_model(
+        "vit_base_patch14_dinov2", registry_name="dinov2_vit_base"
+    ),
+    "timm_dinov2_vit_large": _register_timm_model(
+        "vit_large_patch14_dinov2", registry_name="dinov2_vit_large"
     ),
 }
 
