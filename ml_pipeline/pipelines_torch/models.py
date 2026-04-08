@@ -268,95 +268,126 @@ class HuggingFaceQLoRAWrapper(nn.Module):
     """
     Wrapper for QLoRA (Quantized LoRA) fine-tuning with HuggingFace models.
     Supports both classification and regression tasks.
+    Compatible with standard encoder models (BERT family, ModernBERT) and causal /
+    hybrid-architecture decoder models (Qwen3.5, Gemma 4, Llama, Mistral, etc.).
     Based on the guidelines from https://ai.google.dev/gemma/docs/core/huggingface_text_finetune_qlora
-    
+
     Note: This wrapper inherits from nn.Module to be compatible with GeneralPipeline,
     but training is handled by HuggingFace Trainer, not by the standard PyTorch training loop.
     """
-    def __init__(self, model_name: str, tokenizer_name: Optional[str] = None, 
+    # Standard attention/MLP linear names present in virtually every transformer architecture.
+    # Used as a safe fallback when "all-linear" fails (e.g. hybrid MoE/SSM architectures).
+    _FALLBACK_TARGET_MODULES = [
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ]
+
+    def __init__(self, model_name: str, tokenizer_name: Optional[str] = None,
                  num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu',
-                 lora_config: Optional[Dict[str, Any]] = None, quantization_config: Optional[Dict[str, Any]] = None):
-        super().__init__()  # Initialize nn.Module
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+                 lora_config: Optional[Dict[str, Any]] = None, quantization_config: Optional[Dict[str, Any]] = None,
+                 gradient_accumulation_steps: int = 2):
+        super().__init__()
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
         from peft import LoraConfig, get_peft_model, TaskType
         import torch
-        
+
         self.task_type = task_type
         self.device = device
-        
-        # Set up tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name or model_name)
-        
-        # Adjust num_labels for regression
-        if task_type == 'regression':
-            num_labels = 1
-            
+
         # Force GPU usage if available, raise error if not
         if not torch.cuda.is_available():
             raise RuntimeError(
                 "GPU is required for HuggingFaceQLoRAWrapper but CUDA is not available. "
                 "Please ensure you have a CUDA-capable GPU and PyTorch with CUDA support installed."
             )
-        
+
         # Determine dtype based on GPU compute capability
         try:
-            # Check compute capability for bfloat16 support (Ampere and newer = 8.0+)
             compute_capability = torch.cuda.get_device_capability()[0]
             torch_dtype = torch.bfloat16 if compute_capability >= 8 else torch.float16
             logger.info("Using GPU with compute capability %d.x - dtype: %s", compute_capability, torch_dtype)
         except Exception:
-            # Default to float16 for older GPUs
             torch_dtype = torch.float16
             logger.info("Using GPU with default dtype: %s", torch_dtype)
-            
-        # Try to set up quantization config with proper error handling
+
+        # Detect whether this is a causal (decoder-only) model so we can configure
+        # padding and LoRA correctly.  We inspect the HF config before loading weights.
+        hf_config = AutoConfig.from_pretrained(tokenizer_name or model_name, trust_remote_code=True)
+        model_arch = getattr(hf_config, "architectures", [""])[0].lower()
+        self._is_causal = any(k in model_arch for k in ("causal", "gpt", "llama", "qwen", "gemma", "mistral", "falcon", "mpt"))
+
+        # Set up tokenizer with correct padding side for the architecture
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_name or model_name,
+            trust_remote_code=True,
+            # Causal LMs: left-pad so the classification head reads the last *real* token
+            padding_side="left" if self._is_causal else "right",
+        )
+        # Many causal LMs ship without a pad token; reuse eos_token as pad
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+            logger.info("pad_token not set — using eos_token as pad_token for causal LM.")
+
+        if task_type == 'regression':
+            num_labels = 1
+
+        # Build BitsAndBytes quantization config (NF4 4-bit)
         bnb_config = None
         if quantization_config is None:
             try:
                 from transformers import BitsAndBytesConfig
                 bnb_config = BitsAndBytesConfig(
                     load_in_4bit=True,
-                    bnb_4bit_quant_type='nf4',  # NF4 quantization (better than FP4 for many models)
-                    bnb_4bit_use_double_quant=True,  # Double quantization for additional memory savings
+                    bnb_4bit_quant_type='nf4',
+                    bnb_4bit_use_double_quant=True,
                     bnb_4bit_compute_dtype=torch_dtype,
                 )
-                logger.info("4-bit quantization enabled with NF4")
+                logger.info("4-bit NF4 quantization enabled")
             except Exception as e:
-                logger.warning("Failed to setup quantization config: %s. Falling back to non-quantized model.", e)
-                bnb_config = None
+                logger.warning("Failed to setup quantization config: %s. Falling back to fp16/bf16.", e)
         elif quantization_config is not None:
             try:
                 from transformers import BitsAndBytesConfig
                 bnb_config = BitsAndBytesConfig(**quantization_config)
                 logger.info("Custom quantization config applied")
             except Exception as e:
-                logger.warning("Failed to setup custom quantization config: %s. Falling back to non-quantized model.", e)
-                bnb_config = None
-            
-        # Prepare model loading kwargs - always use GPU
+                logger.warning("Failed to setup custom quantization config: %s. Falling back.", e)
+
         model_kwargs = {
             "num_labels": num_labels,
             "torch_dtype": torch_dtype,
             "low_cpu_mem_usage": True,
-            "device_map": "auto",  # Always use auto device mapping for GPU
+            "device_map": "auto",
+            "trust_remote_code": True,
         }
-        
-        # Add quantization config if available
         if bnb_config is not None:
             model_kwargs["quantization_config"] = bnb_config
-        
-        # Load model with quantization or fallback
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            **model_kwargs
-        )
-        
-        # Prepare model for k-bit training BEFORE applying LoRA if quantization is enabled
+        # Suppress warnings about newly initialised classification head weights
+        model_kwargs["ignore_mismatched_sizes"] = True
+
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
+
+        # Propagate updated pad token id into the model config so attention masks are correct
+        if self.tokenizer.pad_token_id is not None:
+            self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
         if bnb_config is not None:
             from peft import prepare_model_for_kbit_training
-            self.model = prepare_model_for_kbit_training(self.model)
-        
-        # Default LoRA config
+            # use_reentrant=False avoids autograd issues with causal LMs + gradient checkpointing
+            self.model = prepare_model_for_kbit_training(
+                self.model, use_gradient_checkpointing=True,
+                gradient_checkpointing_kwargs={"use_reentrant": False},
+            )
+
+        # Auto-detect classification head module name to add to modules_to_save.
+        # Common names: "classifier" (BERT-family), "score" (Llama/Mistral/Qwen causal LMs).
+        _head_candidates = ["classifier", "score"]
+        _head_name = next(
+            (n for n in _head_candidates if hasattr(self.model, n)), None
+        )
+        _modules_to_save = [_head_name] if _head_name else []
+
         if lora_config is None:
             lora_config = {
                 'lora_alpha': 16,
@@ -365,17 +396,36 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                 'bias': "none",
                 'target_modules': "all-linear",
                 'task_type': TaskType.SEQ_CLS,
-                'modules_to_save': ["classifier"]  # Save classifier head
             }
-        
-        # Apply LoRA after preparing for k-bit training
+            if _modules_to_save:
+                lora_config['modules_to_save'] = _modules_to_save
+
+        # Apply LoRA — fall back to explicit module names if "all-linear" fails
+        # (can happen with hybrid MoE / SSM architectures like Qwen3.5 or Delta Networks)
         lora_cfg = LoraConfig(**lora_config)
-        self.model = get_peft_model(self.model, lora_cfg)
-        
-        # Store whether quantization is enabled for use in fit()
+        try:
+            self.model = get_peft_model(self.model, lora_cfg)
+            logger.info("LoRA applied with target_modules=%s", lora_config.get('target_modules'))
+        except (ValueError, RuntimeError) as e:
+            logger.warning(
+                "LoRA with target_modules=%s failed (%s). "
+                "Retrying with fallback explicit modules: %s",
+                lora_config.get('target_modules'), e, self._FALLBACK_TARGET_MODULES,
+            )
+            fallback_cfg = LoraConfig(
+                lora_alpha=lora_config.get('lora_alpha', 16),
+                lora_dropout=lora_config.get('lora_dropout', 0.05),
+                r=lora_config.get('r', 16),
+                bias=lora_config.get('bias', "none"),
+                target_modules=self._FALLBACK_TARGET_MODULES,
+                task_type=TaskType.SEQ_CLS,
+                modules_to_save=_modules_to_save if _modules_to_save else None,
+            )
+            self.model = get_peft_model(self.model, fallback_cfg)
+            logger.info("LoRA applied with fallback target_modules=%s", self._FALLBACK_TARGET_MODULES)
+
         self._is_quantized = bnb_config is not None
-        
-        # Store max sequence length for consistent train/predict behavior
+        self._gradient_accumulation_steps = gradient_accumulation_steps
         self.max_seq_length = 512  # Default, can be overridden in fit()
         
     def to(self, device):
@@ -490,18 +540,21 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             output_dir=kwargs.get('output_dir', './qlora_results'),
             num_train_epochs=num_epochs,
             per_device_train_batch_size=kwargs.get('batch_size', 1),
-            gradient_accumulation_steps=kwargs.get('gradient_accumulation_steps', 2),
+            gradient_accumulation_steps=kwargs.get('gradient_accumulation_steps', self._gradient_accumulation_steps),
             gradient_checkpointing=True,
+            # use_reentrant=False is required for causal LMs and hybrid architectures
+            # (Qwen3.5, Gemma 4, Llama) to avoid autograd graph issues
+            gradient_checkpointing_kwargs={"use_reentrant": False},
             optim="adamw_torch_fused",
             logging_steps=10,
-            learning_rate=kwargs.get('learning_rate', 1e-4),  # Reduced from 2e-4 for stability
+            learning_rate=kwargs.get('learning_rate', 1e-4),
             fp16=use_fp16,
             bf16=use_bf16,
             max_grad_norm=0.3,
             warmup_ratio=0.03,
             lr_scheduler_type="constant",
             report_to="none",
-            save_strategy="no",  # Don't save checkpoints to save space
+            save_strategy="no",
         )
         
         # Create data collator for dynamic padding
