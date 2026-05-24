@@ -34,7 +34,7 @@ logging.basicConfig(level=logging.DEBUG)
 - **`recipes_df.csv`**, **`recipes_df_test.csv`**, **`recipes_df_test_bis.csv`**: Recipe datasets with embeddings, text, nutrition, and time fields used by the recipe notebook tasks.
 
 ### Testing
-- **`tests/`**: 64 unit tests covering scoring (`ComputeScore`), sklearn wrappers, PyTorch and sklearn pipelines (single-split and k-fold), checkpoint save/load round-trips, and `BenchmarkRunner` epoch normalization + smoke runs.
+- **`tests/`**: 66 unit tests covering scoring (`ComputeScore`), sklearn wrappers, PyTorch and sklearn pipelines (single-split and k-fold), checkpoint save/load round-trips, and `BenchmarkRunner` epoch normalization + smoke runs.
 
 ```bash
 cd ml_pipeline && python -m pytest tests/ -v
@@ -55,9 +55,10 @@ Each benchmark run writes artifacts under `results/<run>/` and records a lightwe
 
 Checkpoint artifacts are saved as:
 - `results/<run>/<checkpoint_id>.pt` for PyTorch state dicts
-- `results/<run>/<checkpoint_id>.pkl` for sklearn joblib
+- `results/<run>/<checkpoint_id>.pkl` for sklearn joblib, including both `SklearnModelWrapper` instances and direct estimators such as `LogisticRegression`
 - `results/<run>/<checkpoint_id>/` for HuggingFace `save_pretrained`
 
 ### Loading a checkpoint
 
 Use `utils.utils.load_model` with a `checkpoint_id` from `index.jsonl`.
+For sklearn joblib artifacts, `load_model` returns the direct estimator when the checkpoint was saved from a raw sklearn model, or restores the inner `.model` when loading into a wrapper class.

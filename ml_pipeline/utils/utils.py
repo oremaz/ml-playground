@@ -97,6 +97,17 @@ def model_exists(metadata_core: dict, path_start: str) -> bool:
     index = _load_index(path_start)
     return checkpoint_id in index
 
+def _is_sklearn_estimator(model) -> bool:
+    try:
+        from sklearn.base import BaseEstimator
+        return isinstance(model, BaseEstimator)
+    except Exception:
+        return (
+            hasattr(model, "fit")
+            and hasattr(model, "predict")
+            and hasattr(model, "get_params")
+        )
+
 def save_model(model, path_start: str, metadata_core: dict) -> dict:
     if path_start is None:
         raise ValueError("path_start must be provided to save the model.")
@@ -123,6 +134,12 @@ def save_model(model, path_start: str, metadata_core: dict) -> dict:
     elif hasattr(model, "model"):
         path = os.path.join(base_dir, f"{checkpoint_id}.pkl")
         joblib.dump(model.model, path)
+        artifact_type = "joblib"
+        artifact_path = f"{checkpoint_id}.pkl"
+        print(f"Model saved to {path}")
+    elif _is_sklearn_estimator(model):
+        path = os.path.join(base_dir, f"{checkpoint_id}.pkl")
+        joblib.dump(model, path)
         artifact_type = "joblib"
         artifact_path = f"{checkpoint_id}.pkl"
         print(f"Model saved to {path}")
@@ -259,8 +276,24 @@ def load_model(
     
     else:
         # Non-directory models (PyTorch .pt files or sklearn models)
+        if entry["artifact_type"] == "joblib":
+            loaded_model = joblib.load(found_path)
+            try:
+                model = model_class(**params)
+            except TypeError:
+                print(f"✓ Sklearn model loaded from {found_path}")
+                return loaded_model
+
+            if hasattr(model, "model"):
+                model.model = loaded_model
+                print(f"✓ Sklearn model loaded from {found_path}")
+                return model
+
+            print(f"✓ Sklearn model loaded from {found_path}")
+            return loaded_model
+
         model = model_class(**params)
-        
+
         if hasattr(model, "load_state_dict"):
             # PyTorch model with state_dict
             if torch.cuda.is_available():
@@ -269,12 +302,7 @@ def load_model(
                 state_dict = torch.load(found_path, map_location=torch.device('cpu'))
             model.load_state_dict(state_dict)
             print(f"✓ PyTorch model loaded from {found_path}")
-            
-        elif hasattr(model, "model"):
-            # Sklearn model wrapped in a class
-            model.model = joblib.load(found_path)
-            print(f"✓ Sklearn model loaded from {found_path}")
-            
+
         else:
             raise ValueError(f"Don't know how to load model of type {type(model)}")
     

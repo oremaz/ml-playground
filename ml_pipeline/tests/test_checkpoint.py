@@ -1,7 +1,5 @@
 """Tests for checkpoint save/load utilities."""
-import json
 import os
-import tempfile
 from unittest.mock import patch
 
 import numpy as np
@@ -12,6 +10,7 @@ from utils.utils import (
     _checkpoint_id,
     _load_index,
     _write_index_entry,
+    load_model,
     model_exists,
     save_model,
     save_metrics,
@@ -110,6 +109,49 @@ class TestSaveModel:
             model = SklearnRandomForestClassifierWrapper(n_estimators=5)
             entry = save_model(model, "test_exp", metadata_core)
             assert entry["artifact_type"] == "joblib"
+
+    def test_save_and_load_wrapped_sklearn_model(self, tmp_path, metadata_core):
+        from pipelines_torch.models import SklearnRandomForestClassifierWrapper
+
+        X = np.array([[0.0], [0.1], [1.0], [1.1]], dtype=np.float32)
+        y = np.array([0, 0, 1, 1])
+
+        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+            model = SklearnRandomForestClassifierWrapper(n_estimators=5, random_state=42)
+            model.fit(X, y)
+            entry = save_model(model, "test_exp", metadata_core)
+            loaded = load_model(
+                SklearnRandomForestClassifierWrapper,
+                {"n_estimators": 5, "random_state": 42},
+                "test_exp",
+                entry["checkpoint_id"],
+            )
+
+            assert entry["artifact_type"] == "joblib"
+            assert isinstance(loaded, SklearnRandomForestClassifierWrapper)
+            np.testing.assert_array_equal(loaded.predict(X), model.predict(X))
+
+    def test_save_and_load_direct_sklearn_estimator(self, tmp_path, metadata_core):
+        from sklearn.linear_model import LogisticRegression
+
+        X = np.array([[0.0], [1.0], [2.0], [3.0]])
+        y = np.array([0, 0, 1, 1])
+
+        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+            model = LogisticRegression().fit(X, y)
+            entry = save_model(model, "test_exp", metadata_core)
+            loaded = load_model(
+                LogisticRegression,
+                {},
+                "test_exp",
+                entry["checkpoint_id"],
+            )
+            artifact_path = os.path.join(str(tmp_path), "test_exp", entry["artifact_path"])
+
+            assert entry["artifact_type"] == "joblib"
+            assert os.path.exists(artifact_path)
+            assert isinstance(loaded, LogisticRegression)
+            np.testing.assert_array_equal(loaded.predict(X), model.predict(X))
 
     def test_dedup_index_entry(self, tmp_path, metadata_core):
         with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
