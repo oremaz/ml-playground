@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 from typing import Optional
 
 _KAGGLE_INPUT_ROOT = Path("/kaggle/input")
+_ARCHIVE_SUFFIXES = {".zip"}
 
 
 def _running_on_kaggle() -> bool:
@@ -19,6 +21,39 @@ def _has_data(directory: Path) -> bool:
         return directory.exists() and any(directory.iterdir())
     except (OSError, StopIteration):
         return directory.exists()
+
+
+def _has_non_archive_data(directory: Path) -> bool:
+    try:
+        return any(
+            entry.is_dir() or entry.suffix.lower() not in _ARCHIVE_SUFFIXES
+            for entry in directory.iterdir()
+        )
+    except (OSError, StopIteration):
+        return False
+
+
+def _safe_extract_zip(zip_path: Path, destination: Path) -> None:
+    destination = destination.resolve()
+    with zipfile.ZipFile(zip_path) as archive:
+        for member in archive.infolist():
+            target = (destination / member.filename).resolve()
+            if destination not in target.parents and target != destination:
+                raise ValueError(f"Refusing to extract unsafe path {member.filename!r} from {zip_path}")
+        archive.extractall(destination)
+
+
+def _extract_archives_if_needed(directory: Path) -> None:
+    if not directory.is_dir() or _has_non_archive_data(directory):
+        return
+
+    archives = sorted(
+        entry for entry in directory.iterdir()
+        if entry.is_file() and entry.suffix.lower() in _ARCHIVE_SUFFIXES
+    )
+    for archive in archives:
+        _safe_extract_zip(archive, directory)
+        print(f"✅ Extracted {archive.name} in {directory}")
 
 
 def _download_with_kaggle_cli(dataset_slug: str, destination: Path) -> None:
@@ -66,12 +101,14 @@ def ensure_kaggle_dataset(
             print(f"✅ Using Kaggle input for {description} at {kaggle_input}")
             return kaggle_input
 
+    _extract_archives_if_needed(local_path)
     if _has_data(local_path):
         print(f"ℹ️ {description} already present at {local_path}")
         return local_path
 
     try:
         _download_with_kaggle_cli(dataset_slug, local_path)
+        _extract_archives_if_needed(local_path)
         if _has_data(local_path):
             print(f"✅ Downloaded {description} to {local_path}")
     except Exception as exc:  # pragma: no cover - requires network/CLI
