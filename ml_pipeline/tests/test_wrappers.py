@@ -36,6 +36,20 @@ class TestSklearnModelWrapperBase:
         result = SklearnModelWrapper._to_numpy(a)
         assert result is a  # Should return same object
 
+    @pytest.mark.parametrize(
+        "wrapper_cls, kwargs",
+        [
+            (SklearnRandomForestClassifierWrapper, {"n_estimators": 5, "random_state": 42}),
+            (XGBoostClassifierWrapper, {"n_estimators": 5, "random_state": 42, "verbosity": 0}),
+            (LightGBMClassifierWrapper, {"n_estimators": 5, "random_state": 42, "verbose": -1}),
+        ],
+    )
+    def test_pipeline_only_kwargs_are_ignored(self, wrapper_cls, kwargs):
+        wrapper = wrapper_cls(input_dim=50_000, num_classes=2, **kwargs)
+        params = wrapper.model.get_params()
+        assert "input_dim" not in params
+        assert "num_classes" not in params
+
 
 class TestRandomForestClassifier:
     def test_fit_predict(self, synthetic_classification_data):

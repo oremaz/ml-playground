@@ -34,7 +34,7 @@ logging.basicConfig(level=logging.DEBUG)
 - **`recipes_df.csv`**, **`recipes_df_test.csv`**, **`recipes_df_test_bis.csv`**: Recipe datasets with embeddings, text, nutrition, and time fields used by the recipe notebook tasks.
 
 ### Testing
-- **`tests/`**: 66 unit tests covering scoring (`ComputeScore`), sklearn wrappers, PyTorch and sklearn pipelines (single-split and k-fold), checkpoint save/load round-trips, and `BenchmarkRunner` epoch normalization + smoke runs.
+- **`tests/`**: 69 unit tests covering scoring (`ComputeScore`), sklearn wrappers, PyTorch and sklearn pipelines (single-split and k-fold), checkpoint save/load round-trips, and `BenchmarkRunner` epoch normalization + smoke runs.
 
 ```bash
 cd ml_pipeline && python -m pytest tests/ -v

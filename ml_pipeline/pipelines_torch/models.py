@@ -43,8 +43,32 @@ class TorchMLPRegressor(TorchMLP):
 class SklearnModelWrapper:
     """Base wrapper making any sklearn model compatible with GeneralPipeline."""
 
+    _PIPELINE_ONLY_KWARGS = {
+        "input_dim",
+        "num_classes",
+        "output_dim",
+        "device",
+        "task_type",
+    }
+
     def __init__(self, sklearn_cls, **kwargs):
+        kwargs = self._filter_sklearn_kwargs(sklearn_cls, kwargs)
         self.model = sklearn_cls(**kwargs)
+
+    @classmethod
+    def _filter_sklearn_kwargs(cls, sklearn_cls, kwargs):
+        model_name = getattr(sklearn_cls, "__name__", str(sklearn_cls))
+        valid_params = set(sklearn_cls().get_params().keys())
+        filtered = {
+            key: value
+            for key, value in kwargs.items()
+            if key in valid_params
+        }
+        ignored = sorted(set(kwargs) - set(filtered))
+        unexpected = [key for key in ignored if key not in cls._PIPELINE_ONLY_KWARGS]
+        if unexpected:
+            logger.warning("Ignoring unsupported %s kwargs: %s", model_name, unexpected)
+        return filtered
 
     def to(self, device):
         return self
@@ -776,4 +800,3 @@ MODEL_REGISTRY: Dict[str, Callable] = {
     **CLASSIFICATION_MODEL_REGISTRY,
     **REGRESSION_MODEL_REGISTRY,
 }
-
