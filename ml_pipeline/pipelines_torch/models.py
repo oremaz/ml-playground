@@ -306,6 +306,17 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         "gate_proj", "up_proj", "down_proj",
     ]
 
+    @staticmethod
+    def _model_dtype_kwargs(torch_dtype):
+        """Use the Transformers 5 name while keeping Transformers 4 compatibility."""
+        try:
+            import transformers
+
+            major = int(transformers.__version__.split(".", 1)[0])
+        except Exception:
+            major = 4
+        return {"dtype": torch_dtype} if major >= 5 else {"torch_dtype": torch_dtype}
+
     def __init__(self, model_name: str, tokenizer_name: Optional[str] = None,
                  num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu',
                  lora_config: Optional[Dict[str, Any]] = None, quantization_config: Optional[Dict[str, Any]] = None,
@@ -380,11 +391,11 @@ class HuggingFaceQLoRAWrapper(nn.Module):
 
         model_kwargs = {
             "num_labels": num_labels,
-            "torch_dtype": torch_dtype,
             "low_cpu_mem_usage": True,
             "device_map": "auto",
             "trust_remote_code": True,
         }
+        model_kwargs.update(self._model_dtype_kwargs(torch_dtype))
         if bnb_config is not None:
             model_kwargs["quantization_config"] = bnb_config
         # Suppress warnings about newly initialised classification head weights
@@ -392,9 +403,11 @@ class HuggingFaceQLoRAWrapper(nn.Module):
 
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
 
-        # Propagate updated pad token id into the model config so attention masks are correct
-        if self.tokenizer.pad_token_id is not None:
-            self.model.config.pad_token_id = self.tokenizer.pad_token_id
+        # Keep Trainer's Transformers 5 special-token alignment quiet and deterministic.
+        # ModernBERT's config has legacy BOS/EOS ids while its tokenizer does not expose
+        # BOS/EOS tokens; for sequence classification the tokenizer should be the source
+        # of truth.
+        self._sync_special_token_ids_with_tokenizer()
 
         if bnb_config is not None:
             from peft import prepare_model_for_kbit_training
@@ -448,9 +461,34 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             self.model = get_peft_model(self.model, fallback_cfg)
             logger.info("LoRA applied with fallback target_modules=%s", self._FALLBACK_TARGET_MODULES)
 
+        self._sync_special_token_ids_with_tokenizer()
+        self._default_peft_return_dict()
+
         self._is_quantized = bnb_config is not None
         self._gradient_accumulation_steps = gradient_accumulation_steps
         self.max_seq_length = 512  # Default, can be overridden in fit()
+
+    def _sync_special_token_ids_with_tokenizer(self):
+        for attr in ("pad_token_id", "bos_token_id", "eos_token_id"):
+            token_id = getattr(self.tokenizer, attr, None)
+            if hasattr(self.model, "config"):
+                setattr(self.model.config, attr, token_id)
+            generation_config = getattr(self.model, "generation_config", None)
+            if generation_config is not None and hasattr(generation_config, attr):
+                setattr(generation_config, attr, token_id)
+
+    def _default_peft_return_dict(self):
+        """Avoid PEFT reading deprecated config.use_return_dict under Transformers 5."""
+        import functools
+
+        original_forward = self.model.forward
+
+        @functools.wraps(original_forward)
+        def forward_with_return_dict(*args, **kwargs):
+            kwargs.setdefault("return_dict", True)
+            return original_forward(*args, **kwargs)
+
+        self.model.forward = forward_with_return_dict
         
     def to(self, device):
         self.device = device
@@ -575,7 +613,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             fp16=use_fp16,
             bf16=use_bf16,
             max_grad_norm=0.3,
-            warmup_ratio=0.03,
+            warmup_steps=0,
             lr_scheduler_type="constant",
             report_to="none",
             save_strategy="no",
