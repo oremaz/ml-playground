@@ -9,6 +9,7 @@ from typing import Optional
 
 _KAGGLE_INPUT_ROOT = Path("/kaggle/input")
 _ARCHIVE_SUFFIXES = {".zip"}
+_IGNORED_DATA_SUFFIXES = _ARCHIVE_SUFFIXES | {".invalid"}
 
 
 def _running_on_kaggle() -> bool:
@@ -26,7 +27,7 @@ def _has_data(directory: Path) -> bool:
 def _has_non_archive_data(directory: Path) -> bool:
     try:
         return any(
-            entry.is_dir() or entry.suffix.lower() not in _ARCHIVE_SUFFIXES
+            entry.is_dir() or entry.suffix.lower() not in _IGNORED_DATA_SUFFIXES
             for entry in directory.iterdir()
         )
     except (OSError, StopIteration):
@@ -43,6 +44,16 @@ def _safe_extract_zip(zip_path: Path, destination: Path) -> None:
         archive.extractall(destination)
 
 
+def _quarantine_bad_archive(archive: Path) -> Path:
+    quarantined = archive.with_suffix(f"{archive.suffix}.invalid")
+    counter = 1
+    while quarantined.exists():
+        quarantined = archive.with_name(f"{archive.name}.{counter}.invalid")
+        counter += 1
+    archive.rename(quarantined)
+    return quarantined
+
+
 def _extract_archives_if_needed(directory: Path) -> None:
     if not directory.is_dir() or _has_non_archive_data(directory):
         return
@@ -52,7 +63,12 @@ def _extract_archives_if_needed(directory: Path) -> None:
         if entry.is_file() and entry.suffix.lower() in _ARCHIVE_SUFFIXES
     )
     for archive in archives:
-        _safe_extract_zip(archive, directory)
+        try:
+            _safe_extract_zip(archive, directory)
+        except zipfile.BadZipFile:
+            quarantined = _quarantine_bad_archive(archive)
+            print(f"⚠️ Skipped invalid zip archive {archive.name}; moved it to {quarantined.name}")
+            continue
         print(f"✅ Extracted {archive.name} in {directory}")
 
 
@@ -102,14 +118,14 @@ def ensure_kaggle_dataset(
             return kaggle_input
 
     _extract_archives_if_needed(local_path)
-    if _has_data(local_path):
+    if _has_non_archive_data(local_path):
         print(f"ℹ️ {description} already present at {local_path}")
         return local_path
 
     try:
         _download_with_kaggle_cli(dataset_slug, local_path)
         _extract_archives_if_needed(local_path)
-        if _has_data(local_path):
+        if _has_non_archive_data(local_path):
             print(f"✅ Downloaded {description} to {local_path}")
     except Exception as exc:  # pragma: no cover - requires network/CLI
         print(f"⚠️ Kaggle download for {description} skipped: {exc}")
