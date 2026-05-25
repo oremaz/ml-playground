@@ -320,7 +320,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
     def __init__(self, model_name: str, tokenizer_name: Optional[str] = None,
                  num_labels: int = 2, task_type: str = 'classification', device: str = 'cpu',
                  lora_config: Optional[Dict[str, Any]] = None, quantization_config: Optional[Dict[str, Any]] = None,
-                 gradient_accumulation_steps: int = 2):
+                 gradient_accumulation_steps: int = 2, max_seq_length: int = 512):
         super().__init__()
         from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
         from peft import LoraConfig, get_peft_model, TaskType
@@ -466,7 +466,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
 
         self._is_quantized = bnb_config is not None
         self._gradient_accumulation_steps = gradient_accumulation_steps
-        self.max_seq_length = 512  # Default, can be overridden in fit()
+        self.max_seq_length = max_seq_length  # Default, can be overridden in fit()
 
     def _sync_special_token_ids_with_tokenizer(self):
         for attr in ("pad_token_id", "bos_token_id", "eos_token_id"):
@@ -562,7 +562,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         dataset = Dataset.from_dict({'text': list(X), 'label': y})  # Use 'label' not 'labels' initially
         
         # Store max_seq_length for use in predict()
-        self.max_seq_length = kwargs.get('max_seq_length', 512)
+        self.max_seq_length = kwargs.get('max_seq_length', self.max_seq_length)
         
         # Tokenize the dataset - DataCollatorWithPadding expects 'label' not 'labels'
         def tokenize_fn(examples):
