@@ -155,6 +155,117 @@ class LightGBMRegressorWrapper(SklearnModelWrapper):
         logger.debug("[%s] predict shape=%s", self.__class__.__name__, np.asarray(preds).shape)
         return torch.tensor(preds, dtype=torch.float32)
 
+
+class CatBoostClassifierWrapper(SklearnModelWrapper):
+    """CatBoost classifier (ordered boosting, oblivious trees)."""
+
+    _DEFAULTS = dict(
+        iterations=500, learning_rate=0.05, depth=6,
+        random_seed=42, verbose=False, allow_writing_files=False,
+    )
+
+    def __init__(self, **kwargs):
+        from catboost import CatBoostClassifier
+
+        params = dict(self._DEFAULTS)
+        params.update({k: v for k, v in kwargs.items() if k not in self._PIPELINE_ONLY_KWARGS})
+        self.model = CatBoostClassifier(**params)
+
+
+class CatBoostRegressorWrapper(SklearnModelWrapper):
+    """CatBoost regressor wrapped in MultiOutputRegressor for multi-target support."""
+
+    _DEFAULTS = dict(
+        iterations=500, learning_rate=0.05, depth=6,
+        random_seed=42, verbose=False, allow_writing_files=False,
+    )
+
+    def __init__(self, **kwargs):
+        from catboost import CatBoostRegressor
+
+        params = dict(self._DEFAULTS)
+        params.update({k: v for k, v in kwargs.items() if k not in self._PIPELINE_ONLY_KWARGS})
+        self.model = MultiOutputRegressor(estimator=CatBoostRegressor(**params))
+
+    def fit(self, X, y, *args, **kwargs):
+        X, y = self._to_numpy(X), self._to_numpy(y)
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+        self.model.fit(X, y)
+
+    def predict(self, X):
+        X = self._to_numpy(X)
+        preds = self.model.predict(X)
+        logger.debug("[%s] predict shape=%s", self.__class__.__name__, np.asarray(preds).shape)
+        return torch.tensor(preds, dtype=torch.float32)
+
+
+def _stacking_base_classifiers(random_state=42, n_estimators=300):
+    from sklearn.linear_model import LogisticRegression
+
+    return [
+        ("lightgbm", lgb.LGBMClassifier(
+            n_estimators=n_estimators, class_weight="balanced",
+            random_state=random_state, verbosity=-1)),
+        ("xgboost", xgb.XGBClassifier(
+            n_estimators=n_estimators, eval_metric="mlogloss",
+            random_state=random_state, verbosity=0)),
+        ("logreg", LogisticRegression(max_iter=3000, class_weight="balanced")),
+    ]
+
+
+class StackingEnsembleClassifierWrapper(SklearnModelWrapper):
+    """LightGBM + XGBoost + logistic base learners stacked out-of-fold
+    with a logistic meta-learner over their predicted probabilities."""
+
+    def __init__(self, cv: int = 5, random_state: int = 42, n_estimators: int = 300,
+                 n_jobs: int = 8, **kwargs):
+        from sklearn.ensemble import StackingClassifier
+        from sklearn.linear_model import LogisticRegression
+
+        # n_jobs bounded by default: -1 on many-core shared hosts spawns a
+        # loky worker storm that can get OOM-killed
+        self.model = StackingClassifier(
+            estimators=_stacking_base_classifiers(random_state, n_estimators),
+            final_estimator=LogisticRegression(max_iter=3000),
+            cv=cv, stack_method="predict_proba", n_jobs=n_jobs,
+        )
+
+
+class StackingEnsembleRegressorWrapper(SklearnModelWrapper):
+    """Per-target stacking of LightGBM + XGBoost + ridge with a RidgeCV
+    meta-learner, wrapped in MultiOutputRegressor for multi-target support."""
+
+    def __init__(self, cv: int = 5, random_state: int = 42, n_estimators: int = 400,
+                 n_jobs: int = 8, **kwargs):
+        from sklearn.ensemble import StackingRegressor
+        from sklearn.linear_model import Ridge, RidgeCV
+
+        base = StackingRegressor(
+            estimators=[
+                ("lightgbm", lgb.LGBMRegressor(
+                    n_estimators=n_estimators, random_state=random_state, verbosity=-1)),
+                ("xgboost", xgb.XGBRegressor(
+                    n_estimators=n_estimators, random_state=random_state, verbosity=0)),
+                ("ridge", Ridge(alpha=10.0)),
+            ],
+            final_estimator=RidgeCV(alphas=[0.1, 1.0, 10.0]),
+            cv=cv, n_jobs=n_jobs,
+        )
+        self.model = MultiOutputRegressor(estimator=base)
+
+    def fit(self, X, y, *args, **kwargs):
+        X, y = self._to_numpy(X), self._to_numpy(y)
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+        self.model.fit(X, y)
+
+    def predict(self, X):
+        X = self._to_numpy(X)
+        preds = self.model.predict(X)
+        logger.debug("[%s] predict shape=%s", self.__class__.__name__, np.asarray(preds).shape)
+        return torch.tensor(preds, dtype=torch.float32)
+
 class TabICLClassifierWrapper(SklearnModelWrapper):
     def __init__(self, **kwargs):
         from tabicl import TabICLClassifier
@@ -817,6 +928,8 @@ CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
     "random_forest_classifier": SklearnRandomForestClassifierWrapper,
     "xgboost_classifier": XGBoostClassifierWrapper,
     "lightgbm_classifier": LightGBMClassifierWrapper,
+    "catboost_classifier": CatBoostClassifierWrapper,
+    "stacking_classifier": StackingEnsembleClassifierWrapper,
     "hf_qlora_classifier": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
     "llama_cpp_classifier": lambda **kwargs: LlamaCppClassifier(task_type='classification', **kwargs),
     "tabicl_classifier": TabICLClassifierWrapper,
@@ -828,6 +941,8 @@ REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
     "random_forest_regressor": SklearnRandomForestRegressorWrapper,
     "xgboost_regressor": XGBoostRegressorWrapper,
     "lightgbm_regressor": LightGBMRegressorWrapper,
+    "catboost_regressor": CatBoostRegressorWrapper,
+    "stacking_regressor": StackingEnsembleRegressorWrapper,
     "hf_qlora_regressor": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='regression', **kwargs),
     "llama_cpp_regressor": lambda **kwargs: LlamaCppClassifier(task_type='regression', **kwargs),
     "tabicl_regressor": TabICLRegressorWrapper,
