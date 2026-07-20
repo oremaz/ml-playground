@@ -55,14 +55,18 @@ Models are registered under descriptive keys. The following tables highlight the
 
 ### Classification Models (`models.py`)
 - `mlp_classifier`, `deep_mlp_classifier`: PyTorch MLPs (configurable depth, batchnorm, dropout)
-- `random_forest_classifier`, `xgboost_classifier`, `lightgbm_classifier`: Classical baselines
-- `tabicl_classifier`: TabICL tabular foundation model (sklearn-compatible, `pip install tabicl`)
+- `random_forest_classifier`, `xgboost_classifier`, `lightgbm_classifier`, `catboost_classifier`: Classical baselines
+- `stacking_classifier`: LightGBM + XGBoost + logistic stack with a logistic meta-learner
+- `tabicl_classifier`: TabICLv2 tabular foundation model (sklearn-compatible, `pip install tabicl`, loads the `tabicl-classifier-v2-*` checkpoint by default)
+- `tabfm_classifier`: Google TabFM zero-shot foundation model, PyTorch backend (in-context learning; install from https://github.com/google-research/tabfm with `pip install -e .`)
 - `hf_lora_classifier`, `hf_qlora_classifier`, `llama_cpp_classifier`: Text-oriented adapters
 
 ### Regression Models (`models.py`)
 - `mlp_regressor`, `deep_mlp_regressor`: PyTorch MLPs
-- `random_forest_regressor`, `xgboost_regressor`, `lightgbm_regressor`
-- `tabicl_regressor`: TabICL tabular foundation model for regression
+- `random_forest_regressor`, `xgboost_regressor`, `lightgbm_regressor`, `catboost_regressor`
+- `stacking_regressor`: Per-target LightGBM + XGBoost + ridge stack with a RidgeCV meta-learner
+- `tabicl_regressor`: TabICLv2 tabular foundation model for regression (quantile-based predictions)
+- `tabfm_regressor`: Google TabFM zero-shot foundation model for regression
 - `hf_lora_regressor`, `hf_qlora_regressor`, `llama_cpp_regressor`
 
 ### Vision Models (`vision_models.py`)

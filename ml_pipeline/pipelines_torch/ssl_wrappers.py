@@ -3,8 +3,8 @@ ssl_wrappers.py
 ~~~~~~~~~~~~~~~~
 Reusable SSL wrappers for the BenchmarkRunner.
 
-Usage (in a notebook):
-    from ml_pipeline.pipelines_torch.ssl_wrappers import SSLVisionWrapper, SSLTabularWrapper
+Usage (in a notebook, with cwd=ml_pipeline):
+    from pipelines_torch.ssl_wrappers import SSLVisionWrapper, SSLTabularWrapper
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 
-from ml_pipeline.pipelines_torch.vision_models import get_model
-from ml_pipeline.pipelines_torch.ssl_algorithms import MeanTeacher, PseudoLabel, PiModel
-from ml_pipeline.pipelines_torch.models import TorchMLPClassifier
-from ml_pipeline.pipelines_torch.ss_models import SemiSupervisedTabular
+from .vision_models import get_model
+from .ssl_algorithms import MeanTeacher, PseudoLabel, PiModel
+from .models import TorchMLPClassifier
+from .ss_models import SemiSupervisedTabular
 
 __all__ = ["SSLVisionWrapper", "SSLTabularWrapper"]
 

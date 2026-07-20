@@ -257,7 +257,7 @@ class DINOv3Classifier(nn.Module):
     def __init__(
         self,
         num_classes: int = 2,
-        model_name: str = "facebook/dinov3-vitl16",
+        model_name: str = "facebook/dinov3-vitl16-pretrain-lvd1689m",
         input_size: int = 518,
         freeze_backbone: bool = True,
     ):
@@ -388,8 +388,12 @@ class TimmVisionModel(nn.Module):
                 raise
         
         self.model = _create_with_fallbacks(attempt_kwargs)
+        self.expected_img_size = timm_kwargs.get("img_size")
 
     def forward(self, x):
+        size = self.expected_img_size
+        if size and (x.shape[-1] != size or x.shape[-2] != size):
+            x = torch.nn.functional.interpolate(x, size=(size, size), mode="bilinear", align_corners=False)
         return self.model(x)
 
 

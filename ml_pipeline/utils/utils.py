@@ -250,8 +250,11 @@ def load_model(
             print("✓ PEFT adapters loaded")
             
             # Now create the wrapper with the loaded model
-            # Don't use the normal __init__ which would create a new model
-            model = object.__new__(model_class)  # Create instance without calling __init__
+            # Don't use the normal __init__ which would create a new model.
+            # model_class is often a lambda factory (not a type) in caller notebooks,
+            # so object.__new__ needs the concrete wrapper class instead.
+            from pipelines_torch.models import HuggingFaceQLoRAWrapper
+            model = object.__new__(HuggingFaceQLoRAWrapper)  # Create instance without calling __init__
             nn.Module.__init__(model)  # Initialize nn.Module part
             
             # Set attributes manually
@@ -261,6 +264,11 @@ def load_model(
             model.device = params.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
             model.max_seq_length = metadata.get('max_seq_length', 512)
             model._is_quantized = False  # Loaded model is not quantized
+            import inspect as _inspect
+            model._needs_token_type_ids = "token_type_ids" in _inspect.signature(base_model.forward).parameters
+            # base_model.config.pad_token_id is None on a fresh from_pretrained load;
+            # batched generation/inference needs it set from the tokenizer.
+            model._sync_special_token_ids_with_tokenizer()
             
             # Restore label encoder if available
             if 'label_classes' in metadata:

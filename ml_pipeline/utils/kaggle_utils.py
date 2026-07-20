@@ -88,13 +88,28 @@ def _download_with_kaggle_cli(dataset_slug: str, destination: Path) -> None:
         str(destination),
         "--unzip",
     ]
-    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True,
+                            stdin=subprocess.DEVNULL, timeout=3600)
     stdout = (result.stdout or "").strip()
     stderr = (result.stderr or "").strip()
     if stdout:
         print(stdout)
     if stderr:
         print(stderr)
+
+
+def _download_with_kagglehub(dataset_slug: str) -> Optional[Path]:
+    """Anonymous fallback for public datasets when kaggle CLI credentials are absent."""
+    try:
+        import kagglehub
+    except ImportError:
+        return None
+    try:
+        path = Path(kagglehub.dataset_download(dataset_slug))
+    except Exception as exc:
+        print(f"⚠️ kagglehub download failed: {exc}")
+        return None
+    return path if _has_data(path) else None
 
 
 def ensure_kaggle_dataset(
@@ -129,5 +144,11 @@ def ensure_kaggle_dataset(
             print(f"✅ Downloaded {description} to {local_path}")
     except Exception as exc:  # pragma: no cover - requires network/CLI
         print(f"⚠️ Kaggle download for {description} skipped: {exc}")
+
+    if not _has_non_archive_data(local_path):
+        hub_path = _download_with_kagglehub(dataset_slug)
+        if hub_path is not None:
+            print(f"✅ Using kagglehub cache for {description} at {hub_path}")
+            return hub_path
 
     return local_path

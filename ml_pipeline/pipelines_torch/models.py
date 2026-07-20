@@ -286,6 +286,44 @@ class TabICLRegressorWrapper(SklearnModelWrapper):
         super().fit(X, y, *args, **kwargs)
 
 
+class TabFMClassifierWrapper(SklearnModelWrapper):
+    """Google TabFM zero-shot tabular foundation model (PyTorch backend).
+
+    Predictions come from in-context learning over the training rows; fit only
+    prepares encoders and the ensemble configuration.
+    """
+
+    def __init__(self, device: Optional[str] = None, **kwargs):
+        from tabfm import TabFMClassifier
+        from tabfm import tabfm_v1_0_0_pytorch
+
+        dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        backbone = tabfm_v1_0_0_pytorch.load(device=dev)
+        params = {k: v for k, v in kwargs.items() if k not in self._PIPELINE_ONLY_KWARGS}
+        self.model = TabFMClassifier(model=backbone, **params)
+
+    def fit(self, X, y, *args, **kwargs):
+        kwargs.pop('sample_weight', None)
+        super().fit(X, y, *args, **kwargs)
+
+
+class TabFMRegressorWrapper(SklearnModelWrapper):
+    """Google TabFM zero-shot tabular foundation model for regression (PyTorch backend)."""
+
+    def __init__(self, device: Optional[str] = None, **kwargs):
+        from tabfm import TabFMRegressor
+        from tabfm import tabfm_v1_0_0_pytorch
+
+        dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        backbone = tabfm_v1_0_0_pytorch.load(model_type="regression", device=dev)
+        params = {k: v for k, v in kwargs.items() if k not in self._PIPELINE_ONLY_KWARGS}
+        self.model = TabFMRegressor(model=backbone, **params)
+
+    def fit(self, X, y, *args, **kwargs):
+        kwargs.pop('sample_weight', None)
+        super().fit(X, y, *args, **kwargs)
+
+
 class LlamaCppClassifier:
     """
     Adapter-style classifier/regressor for llama.cpp models.
@@ -488,6 +526,9 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                     bnb_4bit_quant_type='nf4',
                     bnb_4bit_use_double_quant=True,
                     bnb_4bit_compute_dtype=torch_dtype,
+                    # Keep classification heads unquantized: PEFT's modules_to_save
+                    # cannot clone 4-bit layers (quant state is lost on copy)
+                    llm_int8_skip_modules=["classifier", "score", "head"],
                 )
                 logger.info("4-bit NF4 quantization enabled")
             except Exception as e:
@@ -513,6 +554,11 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         model_kwargs["ignore_mismatched_sizes"] = True
 
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
+
+        # Some architectures (e.g. Gemma3) require an explicit token_type_ids input
+        # even for single-segment classification, and raise instead of defaulting it.
+        import inspect
+        self._needs_token_type_ids = "token_type_ids" in inspect.signature(self.model.forward).parameters
 
         # Keep Trainer's Transformers 5 special-token alignment quiet and deterministic.
         # ModernBERT's config has legacy BOS/EOS ids while its tokenizer does not expose
@@ -679,11 +725,13 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         def tokenize_fn(examples):
             # Tokenize the text
             tokenized = self.tokenizer(
-                examples['text'], 
-                truncation=True, 
+                examples['text'],
+                truncation=True,
                 padding=False,  # Don't pad here, let DataCollator handle it
                 max_length=self.max_seq_length
             )
+            if self._needs_token_type_ids and 'token_type_ids' not in tokenized:
+                tokenized['token_type_ids'] = [[0] * len(ids) for ids in tokenized['input_ids']]
             # Keep the label (DataCollator will rename to labels)
             tokenized['label'] = examples['label']
             return tokenized
@@ -770,20 +818,46 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         
     def eval(self):
         self.model.eval()
-        
+
     def train(self):
         self.model.train()
-        
-    def predict(self, X):
+
+    def _tokenize(self, text, **tok_kwargs):
+        """Tokenize with the token_type_ids some architectures (e.g. Gemma3) require."""
+        inputs = self.tokenizer(text, **tok_kwargs)
+        if self._needs_token_type_ids and 'token_type_ids' not in inputs:
+            inputs['token_type_ids'] = torch.zeros_like(inputs['input_ids'])
+        return inputs
+
+    def _batched_logits(self, X, batch_size: int = 32):
+        """Tokenize and forward X in padded batches, yielding float32 logits per batch.
+
+        Dynamic padding (vs. per-example calls) is what makes inference on
+        large evaluation sets (tens of thousands of rows) tractable.
+        """
+        for start in range(0, len(X), batch_size):
+            chunk = X[start:start + batch_size]
+            inputs = self._tokenize(
+                chunk,
+                return_tensors='pt',
+                truncation=True,
+                padding=True,
+                max_length=self.max_seq_length,
+            ).to(self.device)
+            outputs = self.model(**inputs)
+            # bf16/fp16 logits aren't numpy-convertible directly
+            yield outputs.logits.float()
+
+    def predict(self, X, batch_size: int = 32):
         """For classification: returns predicted class indices. For regression: returns predicted values."""
         import torch
         import numpy as np
-        
+
         if self.task_type == 'classification':
             # Use predict_proba for consistency
-            probs = self.predict_proba(X)
+            probs = self.predict_proba(X, batch_size=batch_size)
             predictions = np.argmax(probs, axis=1)
-            
+
             # Diagnostic stats - check BEFORE decoding
             unique_preds_raw, counts_raw = np.unique(predictions, return_counts=True)
             logger.debug("[%s] Raw prediction indices: %s", self.__class__.__name__, dict(zip(unique_preds_raw, counts_raw)))
@@ -800,37 +874,27 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                     logger.debug("   Decoded predictions: %s", dict(zip(unique_preds_decoded, counts_decoded)))
                 except Exception as e:
                     logger.warning("Label decoding failed: %s", e)
-            
+
             return predictions
         else:
-            # Regression - process directly one at a time
+            # Regression
             self.model.eval()
             predictions = []
-            
+
             # Handle both single text and list of texts
             if isinstance(X, str):
                 X = [X]
-            
-            # Process one at a time to avoid padding token issues
+
             with torch.no_grad():
-                for text in X:
-                    inputs = self.tokenizer(
-                        text,
-                        return_tensors='pt',
-                        truncation=True,
-                        max_length=self.max_seq_length
-                    ).to(self.device)
-                    
-                    outputs = self.model(**inputs)
-                    logits = outputs.logits.squeeze().cpu().numpy()
-                    predictions.append(logits)
-            
-            result = np.array(predictions)
+                for logits in self._batched_logits(X, batch_size=batch_size):
+                    predictions.append(logits.squeeze(-1).cpu().numpy())
+
+            result = np.concatenate(predictions) if predictions else np.array([])
             # Diagnostic stats
             logger.debug("[%s] Predictions - min: %.4f, max: %.4f, mean: %.4f, std: %.4f", self.__class__.__name__, result.min(), result.max(), result.mean(), result.std())
             return result
-                
-    def predict_proba(self, X):
+
+    def predict_proba(self, X, batch_size: int = 32):
         """
         Predict class probabilities for text inputs.
         Returns probabilities for each class (shape: [n_samples, n_classes]).
@@ -839,35 +903,21 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             raise ValueError("predict_proba is only available for classification tasks")
         import torch
         import numpy as np
-        
+
         self.model.eval()
         all_probs = []
-        
+
         # Handle both single text and list of texts
         if isinstance(X, str):
             X = [X]
-        
-        # Process one at a time to avoid padding token issues
+
         with torch.no_grad():
-            for text in X:
-                # Tokenize single text (no padding needed for batch_size=1)
-                inputs = self.tokenizer(
-                    text,
-                    return_tensors='pt',
-                    truncation=True,
-                    max_length=self.max_seq_length
-                ).to(self.device)
-                
-                # Get predictions
-                outputs = self.model(**inputs)
-                logits = outputs.logits
-                
-                # Convert to probabilities (squeeze batch dimension)
-                probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
+            for logits in self._batched_logits(X, batch_size=batch_size):
+                probs = torch.softmax(logits, dim=-1).cpu().numpy()
                 all_probs.append(probs)
         
-        # Stack all predictions into a numpy array
-        result = np.stack(all_probs, axis=0)
+        # Concatenate batches into a single (n_samples, n_classes) array
+        result = np.concatenate(all_probs, axis=0)
         
         # Diagnostic stats
         predicted_classes = np.argmax(result, axis=1)
@@ -893,14 +943,14 @@ class HuggingFaceQLoRAWrapper(nn.Module):
                 # Handle batch
                 all_logits = []
                 for text in X:
-                    inputs = self.tokenizer(text, return_tensors='pt', truncation=True,
+                    inputs = self._tokenize(text, return_tensors='pt', truncation=True,
                                             padding='max_length', max_length=self.max_seq_length).to(self.device)
                     outputs = self.model(**inputs)
                     all_logits.append(outputs.logits)
                 return torch.cat(all_logits, dim=0)
             else:
                 # Single input
-                inputs = self.tokenizer(X, return_tensors='pt', truncation=True,
+                inputs = self._tokenize(X, return_tensors='pt', truncation=True,
                                         padding='max_length', max_length=self.max_seq_length).to(self.device)
                 outputs = self.model(**inputs)
                 return outputs.logits
@@ -933,6 +983,7 @@ CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
     "hf_qlora_classifier": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='classification', **kwargs),
     "llama_cpp_classifier": lambda **kwargs: LlamaCppClassifier(task_type='classification', **kwargs),
     "tabicl_classifier": TabICLClassifierWrapper,
+    "tabfm_classifier": TabFMClassifierWrapper,
 }
 
 REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
@@ -946,6 +997,7 @@ REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
     "hf_qlora_regressor": lambda **kwargs: HuggingFaceQLoRAWrapper(task_type='regression', **kwargs),
     "llama_cpp_regressor": lambda **kwargs: LlamaCppClassifier(task_type='regression', **kwargs),
     "tabicl_regressor": TabICLRegressorWrapper,
+    "tabfm_regressor": TabFMRegressorWrapper,
 }
 
 # Combined registry for backward compatibility

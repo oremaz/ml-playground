@@ -47,6 +47,8 @@ class BenchmarkRunner:
         max_factor: float = 2.0,  # Data augmentation factor (majority_count / final_minority_count)
         random_state: int = 42,  # Random seed for reproducibility
         use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
+        use_wandb: bool = False,  # Log per-run training history to Weights & Biases
+        wandb_project: Optional[str] = None,  # W&B project (defaults to utils.wandb_utils.DEFAULT_PROJECT)
     ):
         self.model_configs = model_configs
         self.augmentations = augmentations
@@ -68,7 +70,9 @@ class BenchmarkRunner:
         self.max_factor = max_factor
         self.random_state = random_state
         self.use_mixed_precision = use_mixed_precision
-        
+        self.use_wandb = use_wandb
+        self.wandb_project = wandb_project
+
         # Normalize epoch configuration across models
         self._epochs_scalar: Optional[int] = None
         self._epochs_sequence: Optional[List[int]] = None
@@ -118,7 +122,8 @@ class BenchmarkRunner:
         Returns:
             DataFrame with benchmark results
         """
-        if self.path_start: 
+        self.save_path = None
+        if self.path_start:
             self.save_path = f"results/{self.path_start}"
             # Create the path if it doesn't exist
             import os
@@ -220,6 +225,15 @@ class BenchmarkRunner:
                         use_kfold=self.use_kfold,
                         k_folds=self.k_folds,
                     )
+                wandb_run = None
+                if self.use_wandb:
+                    from utils.wandb_utils import init_wandb_run
+                    wandb_run = init_wandb_run(
+                        project=self.wandb_project,
+                        name=f"{self.path_start or 'bench'}-{model_name}-{aug_name}",
+                        config=metadata_core,
+                        group=self.path_start,
+                    )
                 # Train with complete data - pipeline will handle augmentations and splits internally
                 training_history = pipeline.fit(X, y)
                 # Print class weights if available
@@ -231,6 +245,15 @@ class BenchmarkRunner:
                 
                 # Save metrics
                 save_metrics(training_history, entry["checkpoint_id"], path_start=self.path_start)
+
+                if wandb_run is not None:
+                    from utils.wandb_utils import log_history, log_summary, finish_run
+                    log_history(wandb_run, training_history)
+                    wandb_run.summary["checkpoint_id"] = entry["checkpoint_id"]
+                    cv_scores = pipeline.get_cv_scores() if hasattr(pipeline, "get_cv_scores") else None
+                    if cv_scores:
+                        log_summary(wandb_run, {f"cv_{m}_mean": s["mean"] for m, s in cv_scores.items()})
+                    finish_run(wandb_run)
                 
 
     def _resolve_epochs(self, model_name: str, model_idx: int) -> int:
