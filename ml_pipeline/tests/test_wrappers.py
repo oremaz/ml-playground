@@ -10,6 +10,8 @@ from pipelines_torch.models import (
     XGBoostRegressorWrapper,
     LightGBMClassifierWrapper,
     LightGBMRegressorWrapper,
+    TabFMClassifierWrapper,
+    TabFMRegressorWrapper,
 )
 
 
@@ -139,3 +141,29 @@ class TestLightGBMWrappers:
         wrapper.fit(X, y)
         preds = wrapper.predict(X)
         assert isinstance(preds, torch.Tensor)
+
+
+class TestTabFMWrappers:
+    def test_classifier_ignores_unsupported_kwargs(self, monkeypatch):
+        from tabfm import tabfm_v1_0_0_pytorch
+
+        backbone = object()
+        monkeypatch.setattr(tabfm_v1_0_0_pytorch, "load", lambda **kwargs: backbone)
+        wrapper = TabFMClassifierWrapper(
+            device="cpu", n_estimators=2, cache_context=True
+        )
+
+        assert wrapper.model.model is backbone
+        assert wrapper.model.n_estimators == 2
+
+    def test_regressor_ignores_unsupported_kwargs(self, monkeypatch):
+        from tabfm import tabfm_v1_0_0_pytorch
+
+        backbone = object()
+        monkeypatch.setattr(tabfm_v1_0_0_pytorch, "load", lambda **kwargs: backbone)
+        wrapper = TabFMRegressorWrapper(
+            device="cpu", n_estimators=2, cache_context=True
+        )
+
+        assert wrapper.model.model is backbone
+        assert wrapper.model.n_estimators == 2

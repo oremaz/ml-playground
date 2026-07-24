@@ -58,7 +58,7 @@ Models are registered under descriptive keys. The following tables highlight the
 - `random_forest_classifier`, `xgboost_classifier`, `lightgbm_classifier`, `catboost_classifier`: Classical baselines
 - `stacking_classifier`: LightGBM + XGBoost + logistic stack with a logistic meta-learner
 - `tabicl_classifier`: TabICLv2 tabular foundation model (sklearn-compatible, `pip install tabicl`, loads the `tabicl-classifier-v2-*` checkpoint by default)
-- `tabfm_classifier`: Google TabFM zero-shot foundation model, PyTorch backend (in-context learning; install from https://github.com/google-research/tabfm with `pip install -e .`)
+- `tabfm_classifier`: Google TabFM zero-shot foundation model, PyTorch backend (in-context learning; installed from the pinned official repository release by the root requirements)
 - `hf_lora_classifier`, `hf_qlora_classifier`, `llama_cpp_classifier`: Text-oriented adapters
 
 ### Regression Models (`models.py`)

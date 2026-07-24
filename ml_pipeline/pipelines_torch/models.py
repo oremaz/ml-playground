@@ -1,4 +1,5 @@
 import logging
+import inspect
 import torch
 import torch.nn as nn
 import numpy as np
@@ -299,7 +300,11 @@ class TabFMClassifierWrapper(SklearnModelWrapper):
 
         dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
         backbone = tabfm_v1_0_0_pytorch.load(device=dev)
-        params = {k: v for k, v in kwargs.items() if k not in self._PIPELINE_ONLY_KWARGS}
+        valid_params = inspect.signature(TabFMClassifier).parameters
+        params = {k: v for k, v in kwargs.items() if k in valid_params}
+        ignored = sorted(set(kwargs) - set(params) - self._PIPELINE_ONLY_KWARGS)
+        if ignored:
+            logger.warning("Ignoring unsupported TabFMClassifier kwargs: %s", ignored)
         self.model = TabFMClassifier(model=backbone, **params)
 
     def fit(self, X, y, *args, **kwargs):
@@ -316,7 +321,11 @@ class TabFMRegressorWrapper(SklearnModelWrapper):
 
         dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
         backbone = tabfm_v1_0_0_pytorch.load(model_type="regression", device=dev)
-        params = {k: v for k, v in kwargs.items() if k not in self._PIPELINE_ONLY_KWARGS}
+        valid_params = inspect.signature(TabFMRegressor).parameters
+        params = {k: v for k, v in kwargs.items() if k in valid_params}
+        ignored = sorted(set(kwargs) - set(params) - self._PIPELINE_ONLY_KWARGS)
+        if ignored:
+            logger.warning("Ignoring unsupported TabFMRegressor kwargs: %s", ignored)
         self.model = TabFMRegressor(model=backbone, **params)
 
     def fit(self, X, y, *args, **kwargs):
