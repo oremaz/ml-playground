@@ -562,7 +562,16 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         # Suppress warnings about newly initialised classification head weights
         model_kwargs["ignore_mismatched_sizes"] = True
 
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
+        if hf_config.model_type == "gemma4":
+            self.model = self._load_gemma4_sequence_classifier(
+                model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+            )
+        elif hf_config.model_type in {"lfm2", "nanbeige"}:
+            self.model = self._load_causal_sequence_classifier(
+                model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+            )
+        else:
+            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
 
         # Some architectures (e.g. Gemma3) require an explicit token_type_ids input
         # even for single-segment classification, and raise instead of defaulting it.
@@ -633,6 +642,82 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         self._is_quantized = bnb_config is not None
         self._gradient_accumulation_steps = gradient_accumulation_steps
         self.max_seq_length = max_seq_length  # Default, can be overridden in fit()
+
+    @staticmethod
+    def _load_gemma4_sequence_classifier(
+        model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+    ):
+        """Attach a trainable sequence-classification head to Gemma 4's text path."""
+        from transformers import AutoModelForMultimodalLM
+
+        model_kwargs = dict(model_kwargs)
+        model_kwargs.pop("num_labels", None)
+        model_kwargs.pop("ignore_mismatched_sizes", None)
+        model = AutoModelForMultimodalLM.from_pretrained(model_name, **model_kwargs)
+        return HuggingFaceQLoRAWrapper._attach_sequence_classification_head(
+            model, hf_config.text_config.hidden_size, hf_config.initializer_range,
+            num_labels, task_type, torch_dtype,
+        )
+
+    @staticmethod
+    def _load_causal_sequence_classifier(
+        model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+    ):
+        """Attach a classifier when Transformers has no sequence-classification auto class."""
+        from transformers import AutoModelForCausalLM
+
+        model_kwargs = dict(model_kwargs)
+        model_kwargs.pop("num_labels", None)
+        model_kwargs.pop("ignore_mismatched_sizes", None)
+        model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+        return HuggingFaceQLoRAWrapper._attach_sequence_classification_head(
+            model, hf_config.hidden_size, hf_config.initializer_range,
+            num_labels, task_type, torch_dtype,
+        )
+
+    @staticmethod
+    def _attach_sequence_classification_head(
+        model, hidden_size, initializer_range, num_labels, task_type, torch_dtype
+    ):
+        import types
+        import torch
+        from torch import nn
+        from transformers.modeling_outputs import SequenceClassifierOutput
+
+        model.score = nn.Linear(
+            hidden_size, num_labels, bias=False, device=model.device, dtype=torch_dtype
+        )
+        nn.init.normal_(model.score.weight, mean=0.0, std=initializer_range)
+        model.config.num_labels = num_labels
+        model.config.problem_type = "regression" if task_type == "regression" else "single_label_classification"
+        multimodal_backbone = model.model
+
+        def sequence_classification_forward(
+            self, input_ids=None, attention_mask=None, labels=None, **kwargs
+        ):
+            kwargs.pop("return_dict", None)
+            outputs = multimodal_backbone(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+                **kwargs,
+            )
+            logits = self.score(outputs.last_hidden_state[:, -1, :])
+            loss = None
+            if labels is not None:
+                if self.config.problem_type == "regression":
+                    loss = nn.functional.mse_loss(logits.squeeze(-1), labels.float())
+                else:
+                    loss = nn.functional.cross_entropy(
+                        logits.view(-1, self.config.num_labels), labels.view(-1)
+                    )
+            return SequenceClassifierOutput(
+                loss=loss, logits=logits, hidden_states=outputs.hidden_states
+            )
+
+        model.forward = types.MethodType(sequence_classification_forward, model)
+        return model
 
     def _sync_special_token_ids_with_tokenizer(self):
         for attr in ("pad_token_id", "bos_token_id", "eos_token_id"):

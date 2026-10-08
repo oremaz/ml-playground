@@ -1,8 +1,11 @@
 """Tests for SklearnModelWrapper base class and concrete wrappers."""
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 import torch
 from pipelines_torch.models import (
+    HuggingFaceQLoRAWrapper,
     SklearnModelWrapper,
     SklearnRandomForestClassifierWrapper,
     SklearnRandomForestRegressorWrapper,
@@ -13,6 +16,100 @@ from pipelines_torch.models import (
     TabFMClassifierWrapper,
     TabFMRegressorWrapper,
 )
+
+
+class TestHuggingFaceQLoRAWrapper:
+    def test_gemma4_classifier_uses_backbone_hidden_states(self, monkeypatch):
+        class DummyBackbone(torch.nn.Module):
+            def forward(self, input_ids=None, attention_mask=None, **kwargs):
+                batch_size, sequence_length = input_ids.shape
+                hidden = torch.arange(
+                    batch_size * sequence_length * 4, dtype=torch.float32
+                ).reshape(batch_size, sequence_length, 4)
+                return SimpleNamespace(
+                    last_hidden_state=hidden,
+                    hidden_states=(hidden,),
+                )
+
+        class DummyGemma4(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.anchor = torch.nn.Parameter(torch.zeros(1))
+                self.model = DummyBackbone()
+                self.config = SimpleNamespace()
+
+            @property
+            def device(self):
+                return self.anchor.device
+
+        dummy_model = DummyGemma4()
+        monkeypatch.setattr(
+            "transformers.AutoModelForMultimodalLM.from_pretrained",
+            lambda *args, **kwargs: dummy_model,
+        )
+        config = SimpleNamespace(
+            text_config=SimpleNamespace(hidden_size=4), initializer_range=0.02
+        )
+
+        model = HuggingFaceQLoRAWrapper._load_gemma4_sequence_classifier(
+            "dummy/gemma-4",
+            config,
+            {"num_labels": 2, "ignore_mismatched_sizes": True},
+            num_labels=2,
+            task_type="classification",
+            torch_dtype=torch.float32,
+        )
+        output = model(
+            input_ids=torch.ones((2, 3), dtype=torch.long),
+            attention_mask=torch.ones((2, 3), dtype=torch.long),
+            labels=torch.tensor([0, 1]),
+        )
+
+        assert output.logits.shape == (2, 2)
+        assert output.loss.ndim == 0
+        assert output.hidden_states[0].shape == (2, 3, 4)
+        assert model.config.problem_type == "single_label_classification"
+
+    @pytest.mark.parametrize("model_type", ["lfm2", "nanbeige"])
+    def test_custom_causal_classifier_uses_backbone_hidden_states(
+        self, monkeypatch, model_type
+    ):
+        class DummyBackbone(torch.nn.Module):
+            def forward(self, input_ids=None, attention_mask=None, **kwargs):
+                hidden = torch.ones((*input_ids.shape, 4), dtype=torch.float32)
+                return SimpleNamespace(
+                    last_hidden_state=hidden,
+                    hidden_states=(hidden,),
+                )
+
+        class DummyCausalLM(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.anchor = torch.nn.Parameter(torch.zeros(1))
+                self.model = DummyBackbone()
+                self.config = SimpleNamespace(model_type=model_type)
+
+            @property
+            def device(self):
+                return self.anchor.device
+
+        monkeypatch.setattr(
+            "transformers.AutoModelForCausalLM.from_pretrained",
+            lambda *args, **kwargs: DummyCausalLM(),
+        )
+        config = SimpleNamespace(hidden_size=4, initializer_range=0.02)
+
+        model = HuggingFaceQLoRAWrapper._load_causal_sequence_classifier(
+            f"dummy/{model_type}", config, {}, 2, "classification", torch.float32
+        )
+        output = model(
+            input_ids=torch.ones((2, 3), dtype=torch.long),
+            attention_mask=torch.ones((2, 3), dtype=torch.long),
+            labels=torch.tensor([0, 1]),
+        )
+
+        assert output.logits.shape == (2, 2)
+        assert output.loss.ndim == 0
 
 
 class TestSklearnModelWrapperBase:
