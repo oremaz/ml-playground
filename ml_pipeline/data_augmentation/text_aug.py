@@ -465,7 +465,7 @@ TEXT_AUGMENTATION_REGISTRY: Dict[str, Callable] = {
 """
 TEXT_AUGMENTATION_REGISTRY usage
 ---------------------------------
-from text_aug import TEXT_AUGMENTATION_REGISTRY
+from ml_pipeline.data_augmentation.text_aug import TEXT_AUGMENTATION_REGISTRY
 
 # Gemini 3.1 Flash Lite (default)
 result = TEXT_AUGMENTATION_REGISTRY["llm_paraphrase"](texts=["Hello world"])

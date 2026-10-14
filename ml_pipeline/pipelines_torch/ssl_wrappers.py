@@ -4,7 +4,7 @@ ssl_wrappers.py
 Reusable SSL wrappers for the BenchmarkRunner.
 
 Usage (in a notebook, with cwd=ml_pipeline):
-    from pipelines_torch.ssl_wrappers import SSLVisionWrapper, SSLTabularWrapper
+    from ml_pipeline.pipelines_torch.ssl_wrappers import SSLVisionWrapper, SSLTabularWrapper
 """
 
 from __future__ import annotations

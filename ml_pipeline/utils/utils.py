@@ -15,7 +15,7 @@ if _running_on_kaggle():
     RESULTS_DIR_IN = "/kaggle/input"
     RESULTS_DIR = RESULTS_DIR_OUT
 else:
-    RESULTS_DIR = "results"
+    RESULTS_DIR = os.environ.get("ML_PIPELINE_RESULTS_DIR", "results")
     RESULTS_DIR_OUT = RESULTS_DIR
     RESULTS_DIR_IN = RESULTS_DIR
 
@@ -253,7 +253,7 @@ def load_model(
             # Don't use the normal __init__ which would create a new model.
             # model_class is often a lambda factory (not a type) in caller notebooks,
             # so object.__new__ needs the concrete wrapper class instead.
-            from pipelines_torch.models import HuggingFaceQLoRAWrapper
+            from ml_pipeline.pipelines_torch.models import HuggingFaceQLoRAWrapper
             model = object.__new__(HuggingFaceQLoRAWrapper)  # Create instance without calling __init__
             nn.Module.__init__(model)  # Initialize nn.Module part
             

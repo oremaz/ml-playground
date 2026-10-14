@@ -11,8 +11,8 @@ from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score, roc_auc_score, average_precision_score
 from sklearn.preprocessing import label_binarize
-from utils.utils import select_best_epoch
-from utils.data import train_val_test_split
+from ml_pipeline.utils.utils import select_best_epoch
+from ml_pipeline.utils.data import train_val_test_split
 
 logger = logging.getLogger(__name__)
 
@@ -944,7 +944,7 @@ class GeneralPipeline(Evaluate):
 
     def _select_best_epoch(self) -> int:
         """
-        Select best epoch using centralized logic from utils.utils.
+        Select best epoch using centralized logic from ml_pipeline.utils.utils.
         This ensures consistency across all components.
         """
         return select_best_epoch(self.history, self.task_type, metric=self._default_selection_metric())

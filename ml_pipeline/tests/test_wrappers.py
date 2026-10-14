@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from pipelines_torch.models import (
+from ml_pipeline.pipelines_torch.models import (
     HuggingFaceQLoRAWrapper,
     SklearnModelWrapper,
     SklearnRandomForestClassifierWrapper,
@@ -241,6 +241,10 @@ class TestLightGBMWrappers:
 
 
 class TestTabFMWrappers:
+    @pytest.fixture(autouse=True)
+    def require_tabfm(self):
+        pytest.importorskip("tabfm", reason="Install the tabular extra to test TabFM wrappers")
+
     def test_classifier_ignores_unsupported_kwargs(self, monkeypatch):
         from tabfm import tabfm_v1_0_0_pytorch
 

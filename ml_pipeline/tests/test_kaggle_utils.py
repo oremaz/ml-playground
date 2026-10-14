@@ -1,7 +1,7 @@
 """Tests for Kaggle dataset resolution helpers."""
 import zipfile
 
-from utils import kaggle_utils
+from ml_pipeline.utils import kaggle_utils
 
 
 def test_existing_local_zip_is_extracted(tmp_path):

@@ -1,15 +1,10 @@
 """Shared fixtures for ml_pipeline tests."""
-import os
-import sys
 import shutil
 import tempfile
 
 import numpy as np
 import pytest
 import torch
-
-# Ensure ml_pipeline is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture

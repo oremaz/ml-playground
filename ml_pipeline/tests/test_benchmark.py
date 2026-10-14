@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import torch
 from unittest.mock import patch
-from pipelines_torch.benchmark import BenchmarkRunner, set_all_seeds
+from ml_pipeline.pipelines_torch.benchmark import BenchmarkRunner, set_all_seeds
 
 
 class TestSetAllSeeds:
@@ -110,7 +110,7 @@ class TestBenchmarkRunSmoke:
         import os
         os.makedirs(os.path.join(results_dir, "smoke_test"), exist_ok=True)
 
-        with patch("utils.utils.RESULTS_DIR_OUT", results_dir):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", results_dir):
             runner = BenchmarkRunner(
                 model_configs=model_configs,
                 augmentations=[None],

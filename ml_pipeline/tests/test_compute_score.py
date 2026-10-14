@@ -1,7 +1,7 @@
 """Tests for ComputeScore utility class."""
 import numpy as np
 import pytest
-from pipelines_torch.base import ComputeScore
+from ml_pipeline.pipelines_torch.base import ComputeScore
 
 
 class TestF1:

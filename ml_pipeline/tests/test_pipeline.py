@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 import torch
 import torch.optim as optim
-from pipelines_torch.base import GeneralPipeline, GeneralPipelineSklearn
-from pipelines_torch.models import SklearnRandomForestClassifierWrapper
+from ml_pipeline.pipelines_torch.base import GeneralPipeline, GeneralPipelineSklearn
+from ml_pipeline.pipelines_torch.models import SklearnRandomForestClassifierWrapper
 
 
 class TestGeneralPipelineClassification:

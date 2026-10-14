@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from utils.utils import (
+from ml_pipeline.utils.utils import (
     _checkpoint_id,
     _load_index,
     _write_index_entry,
@@ -53,12 +53,12 @@ class TestCheckpointId:
 
 class TestIndexOperations:
     def test_load_empty_index(self, tmp_path):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             index = _load_index("test_exp")
             assert index == {}
 
     def test_write_and_load(self, tmp_path):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             entry = {"checkpoint_id": "abc123", "model_name": "TestMLP"}
             _write_index_entry("test_exp", entry)
             index = _load_index("test_exp")
@@ -66,7 +66,7 @@ class TestIndexOperations:
             assert index["abc123"]["model_name"] == "TestMLP"
 
     def test_multiple_entries(self, tmp_path):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             entry1 = {"checkpoint_id": "aaa", "model_name": "Model1"}
             entry2 = {"checkpoint_id": "bbb", "model_name": "Model2"}
             _write_index_entry("test_exp", entry1)
@@ -77,11 +77,11 @@ class TestIndexOperations:
 
 class TestModelExists:
     def test_not_exists(self, tmp_path, metadata_core):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             assert model_exists(metadata_core, "test_exp") is False
 
     def test_exists_after_save(self, tmp_path, metadata_core):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             model = torch.nn.Linear(5, 2)
             save_model(model, "test_exp", metadata_core)
             assert model_exists(metadata_core, "test_exp") is True
@@ -93,7 +93,7 @@ class TestModelExists:
 
 class TestSaveModel:
     def test_save_torch_model(self, tmp_path, metadata_core):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             model = torch.nn.Linear(5, 2)
             entry = save_model(model, "test_exp", metadata_core)
             assert "checkpoint_id" in entry
@@ -103,20 +103,20 @@ class TestSaveModel:
             assert os.path.exists(artifact_path)
 
     def test_save_sklearn_model(self, tmp_path, metadata_core):
-        from pipelines_torch.models import SklearnRandomForestClassifierWrapper
+        from ml_pipeline.pipelines_torch.models import SklearnRandomForestClassifierWrapper
 
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             model = SklearnRandomForestClassifierWrapper(n_estimators=5)
             entry = save_model(model, "test_exp", metadata_core)
             assert entry["artifact_type"] == "joblib"
 
     def test_save_and_load_wrapped_sklearn_model(self, tmp_path, metadata_core):
-        from pipelines_torch.models import SklearnRandomForestClassifierWrapper
+        from ml_pipeline.pipelines_torch.models import SklearnRandomForestClassifierWrapper
 
         X = np.array([[0.0], [0.1], [1.0], [1.1]], dtype=np.float32)
         y = np.array([0, 0, 1, 1])
 
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             model = SklearnRandomForestClassifierWrapper(n_estimators=5, random_state=42)
             model.fit(X, y)
             entry = save_model(model, "test_exp", metadata_core)
@@ -137,7 +137,7 @@ class TestSaveModel:
         X = np.array([[0.0], [1.0], [2.0], [3.0]])
         y = np.array([0, 0, 1, 1])
 
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             model = LogisticRegression().fit(X, y)
             entry = save_model(model, "test_exp", metadata_core)
             loaded = load_model(
@@ -154,7 +154,7 @@ class TestSaveModel:
             np.testing.assert_array_equal(loaded.predict(X), model.predict(X))
 
     def test_dedup_index_entry(self, tmp_path, metadata_core):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             model = torch.nn.Linear(5, 2)
             save_model(model, "test_exp", metadata_core)
             save_model(model, "test_exp", metadata_core)
@@ -165,7 +165,7 @@ class TestSaveModel:
 
 class TestSaveMetrics:
     def test_save_metrics(self, tmp_path):
-        with patch("utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
+        with patch("ml_pipeline.utils.utils.RESULTS_DIR_OUT", str(tmp_path)):
             os.makedirs(os.path.join(str(tmp_path), "test_exp"), exist_ok=True)
             history = [{"loss": 0.5, "val_loss": 0.6}, {"loss": 0.3, "val_loss": 0.4}]
             save_metrics(history, "abc123", "test_exp")

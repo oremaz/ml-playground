@@ -5,8 +5,8 @@ import random
 import numpy as np
 import torch
 import logging
-from pipelines_torch.base import GeneralPipeline
-from utils.utils import save_model, save_metrics, model_exists
+from ml_pipeline.pipelines_torch.base import GeneralPipeline
+from ml_pipeline.utils.utils import save_model, save_metrics, model_exists
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class BenchmarkRunner:
         random_state: int = 42,  # Random seed for reproducibility
         use_mixed_precision: bool = True,  # Use automatic mixed precision for faster training
         use_wandb: bool = False,  # Log per-run training history to Weights & Biases
-        wandb_project: Optional[str] = None,  # W&B project (defaults to utils.wandb_utils.DEFAULT_PROJECT)
+        wandb_project: Optional[str] = None,  # W&B project (defaults to ml_pipeline.utils.wandb_utils.DEFAULT_PROJECT)
     ):
         self.model_configs = model_configs
         self.augmentations = augmentations
@@ -182,7 +182,7 @@ class BenchmarkRunner:
                 if self.weight_decay is not None:
                     optimizer_params["weight_decay"] = self.weight_decay
                 # Dynamically select pipeline type
-                from pipelines_torch.base import GeneralPipelineSklearn
+                from ml_pipeline.pipelines_torch.base import GeneralPipelineSklearn
                 # Some registry entries expose factories (e.g., lambdas) instead of raw classes,
                 # so we inspect the instantiated model rather than the constructor.
                 is_torch_model = isinstance(model, torch.nn.Module)
@@ -227,7 +227,7 @@ class BenchmarkRunner:
                     )
                 wandb_run = None
                 if self.use_wandb:
-                    from utils.wandb_utils import init_wandb_run
+                    from ml_pipeline.utils.wandb_utils import init_wandb_run
                     wandb_run = init_wandb_run(
                         project=self.wandb_project,
                         name=f"{self.path_start or 'bench'}-{model_name}-{aug_name}",
@@ -247,7 +247,7 @@ class BenchmarkRunner:
                 save_metrics(training_history, entry["checkpoint_id"], path_start=self.path_start)
 
                 if wandb_run is not None:
-                    from utils.wandb_utils import log_history, log_summary, finish_run
+                    from ml_pipeline.utils.wandb_utils import log_history, log_summary, finish_run
                     log_history(wandb_run, training_history)
                     wandb_run.summary["checkpoint_id"] = entry["checkpoint_id"]
                     cv_scores = pipeline.get_cv_scores() if hasattr(pipeline, "get_cv_scores") else None

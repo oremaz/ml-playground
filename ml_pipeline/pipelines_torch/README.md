@@ -99,18 +99,18 @@ Provides loss wrappers that can sit on top of any vision backbone:
 
 ```python
 # Tabular/text models
-from pipelines_torch.models import MODEL_REGISTRY
+from ml_pipeline.pipelines_torch.models import MODEL_REGISTRY
 model = MODEL_REGISTRY['tabr_classifier'](input_dim=..., num_classes=..., init_kwargs={'k': 32})
 
 # Vision models
-from pipelines_torch.vision_models import get_model
+from ml_pipeline.pipelines_torch.vision_models import get_model
 vision_model = get_model('resnet50', num_classes=2)
 ```
 
 ### 2. Build a Pipeline
 
 ```python
-from pipelines_torch.base import GeneralPipeline
+from ml_pipeline.pipelines_torch.base import GeneralPipeline
 pipeline = GeneralPipeline(
     model=model,
     loss_fn='CrossEntropyLoss',
@@ -125,7 +125,7 @@ pipeline = GeneralPipeline(
 ### 3. Train with Semi-Supervised Helpers
 
 ```python
-from pipelines_torch.ss_models import SemiSupervisedTabular
+from ml_pipeline.pipelines_torch.ss_models import SemiSupervisedTabular
 ssl_wrapper = SemiSupervisedTabular(model, num_classes=2, use_mean_teacher=True)
 loss, logs = ssl_wrapper.step((xb_l, yb_l), (xb_u, yb_u), epoch)
 ```
@@ -133,7 +133,7 @@ loss, logs = ssl_wrapper.step((xb_l, yb_l), (xb_u, yb_u), epoch)
 ### 4. Benchmark Multiple Models/Augmentations
 
 ```python
-from pipelines_torch.benchmark import BenchmarkRunner
+from ml_pipeline.pipelines_torch.benchmark import BenchmarkRunner
 runner = BenchmarkRunner(
     model_configs=[...],
     augmentations=[MGS_GRF_Augmentor()],

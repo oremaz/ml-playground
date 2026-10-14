@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 import inspect
@@ -12,14 +11,12 @@ import pandas as pd
 import streamlit as st
 
 APP_DIR = Path(__file__).resolve().parent
-if str(APP_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_DIR))
 
-from pipelines_torch.benchmark import BenchmarkRunner
-from pipelines_torch.models import CLASSIFICATION_MODEL_REGISTRY, REGRESSION_MODEL_REGISTRY
-from data_augmentation import augmentations as aug
-from utils.data import load_csv, prepare_embeddings_data
-from utils.utils import RESULTS_DIR_OUT
+from ml_pipeline.pipelines_torch.benchmark import BenchmarkRunner
+from ml_pipeline.pipelines_torch.models import CLASSIFICATION_MODEL_REGISTRY, REGRESSION_MODEL_REGISTRY
+from ml_pipeline.data_augmentation import augmentations as aug
+from ml_pipeline.utils.data import load_csv, prepare_embeddings_data
+from ml_pipeline.utils.utils import RESULTS_DIR_OUT
 
 
 def _parse_json(text: str, default):
