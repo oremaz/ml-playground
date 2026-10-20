@@ -1,0 +1,39 @@
+{
+  "selection": {
+    "trial": 2,
+    "model": "lightgbm_classifier",
+    "augmentation": "none",
+    "accuracy": 0.9518686297,
+    "f1_macro": 0.9523031751,
+    "roc_auc": 0.9975269788,
+    "reference_accuracy": 0.181200453,
+    "reference_f1_macro": 0.0511345478,
+    "reference_roc_auc": 0.5,
+    "completed_folds": 1,
+    "expected_folds": 1
+  },
+  "test_rows": 2075,
+  "scores": {
+    "accuracy": 0.8587951807228915,
+    "f1_macro": 0.8617463732892808,
+    "roc_auc": 0.9766575278434088
+  },
+  "training_protocol": "Selected saved model, fitted on inner training only; no test-driven refit or selection.",
+  "test_positive_prevalence": null,
+  "diagnostic_metrics": [
+    {
+      "name": "custom_sitting_recall",
+      "kind": "class_recall",
+      "rows": 2075,
+      "value": 0.6864864864864865,
+      "class_rows": 370
+    },
+    {
+      "name": "custom_standing_recall",
+      "kind": "class_recall",
+      "rows": 2075,
+      "value": 0.8092783505154639,
+      "class_rows": 388
+    }
+  ]
+}

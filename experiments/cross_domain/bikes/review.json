@@ -1,0 +1,4 @@
+{
+  "simulated_reviewer": true,
+  "changes": "Fixed requested primary metric, standard preprocessing, seed 42, .2 validation fraction and 100-tree/4-thread CPU resource baseline. Model families, selected features, preparation and split column come from the LLM proposal."
+}

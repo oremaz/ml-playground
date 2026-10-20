@@ -1,0 +1,31 @@
+{
+  "domain": "bikes",
+  "all_checked": true,
+  "checks": [
+    "saved preparation reproduced",
+    "original rows/targets preserved; model inputs independent of target values",
+    "bike observation-end times and excluded current weather/target components checked",
+    "future sensor perturbation cannot change past model inputs",
+    {
+      "exact_previous_hour_weather_feature_matches": {
+        "weathersit": [
+          "prev_weathersit"
+        ],
+        "temp": [
+          "prev_temp"
+        ],
+        "atemp": [
+          "prev_atemp"
+        ],
+        "hum": [
+          "prev_hum"
+        ],
+        "windspeed": [
+          "prev_windspeed"
+        ]
+      }
+    }
+  ],
+  "rows": 17379,
+  "features": 14
+}

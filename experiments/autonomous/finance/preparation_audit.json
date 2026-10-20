@@ -1,0 +1,12 @@
+{
+  "domain": "finance",
+  "all_checked": true,
+  "checks": [
+    "saved preparation reproduced",
+    "Friday-only unique decisions",
+    "independent five-observation adjusted-price labels and observation ends",
+    "future stock price/volume mutation cannot change past features or row eligibility"
+  ],
+  "rows": 84002,
+  "features": 7
+}

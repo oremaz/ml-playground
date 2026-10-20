@@ -1,0 +1,144 @@
+{
+  "domain": "bikes",
+  "native_calls_answered": 12,
+  "single_simulated_approval": true,
+  "trials": 5,
+  "notes": 5,
+  "no_final_feedback_to_llm": true,
+  "features": 13,
+  "train_rows": 11120,
+  "validation_rows": 2781,
+  "final_rows": 3476,
+  "selection_metric": "rmse",
+  "metric_definitions": [
+    {
+      "name": "custom_commuter_hour_rmse",
+      "kind": "rmse",
+      "where": [
+        {
+          "column": "is_commuter_focus",
+          "op": "eq",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "validation_baseline": 67.859567479,
+  "validation_selected": 65.6870874452,
+  "final_baseline_vs_selected": {
+    "baseline": {
+      "trial": 1,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.8980446924612618,
+        "rmse": 70.4017748815507,
+        "mae": 48.29985151363912
+      },
+      "diagnostic_metrics": [
+        {
+          "name": "custom_commuter_hour_rmse",
+          "kind": "rmse",
+          "rows": 687,
+          "value": 112.27668211396077
+        }
+      ]
+    },
+    "selected": {
+      "trial": 5,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.9039832040746917,
+        "rmse": 68.32069780164582,
+        "mae": 46.78096731617224
+      },
+      "diagnostic_metrics": [
+        {
+          "name": "custom_commuter_hour_rmse",
+          "kind": "rmse",
+          "rows": 687,
+          "value": 107.09805359927209
+        }
+      ]
+    }
+  },
+  "fitted_replays": [
+    {
+      "trial": 1,
+      "model": "random_forest_regressor",
+      "scores": {
+        "r2": 0.8682873323345113,
+        "rmse": 78.75903541511893,
+        "mae": 53.12223480762316
+      }
+    },
+    {
+      "trial": 1,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.9022202491760254,
+        "rmse": 67.85956747900401,
+        "mae": 47.87748336791992
+      }
+    },
+    {
+      "trial": 1,
+      "model": "xgboost_regressor",
+      "scores": {
+        "r2": 0.8964735269546509,
+        "rmse": 69.82522125591511,
+        "mae": 49.33549499511719
+      }
+    },
+    {
+      "trial": 2,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.900041937828064,
+        "rmse": 68.61127338810657,
+        "mae": 48.40262222290039
+      }
+    },
+    {
+      "trial": 3,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.9029848575592041,
+        "rmse": 67.59372110494066,
+        "mae": 47.248538970947266
+      }
+    },
+    {
+      "trial": 4,
+      "model": "xgboost_regressor",
+      "scores": {
+        "r2": 0.8883342146873474,
+        "rmse": 72.51814495459912,
+        "mae": 51.68461227416992
+      }
+    },
+    {
+      "trial": 5,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.9083807468414307,
+        "rmse": 65.687087445184,
+        "mae": 47.1405029296875
+      }
+    }
+  ],
+  "interpretation": "Descriptive, adaptively selected validation comparison and a single reserved partition; no significance claim.",
+  "training_mean_reference": {
+    "prediction": 151.25125899280576,
+    "validation": {
+      "r2": -0.28980340993319786,
+      "rmse": 246.4610963230292,
+      "mae": 188.54178941636332
+    },
+    "final": {
+      "r2": -0.19556072736523933,
+      "rmse": 241.08184638921796,
+      "mae": 178.24746959624477
+    },
+    "purpose": "Training-only constant. Energy reference was computed after search. Bike/activity validation reference was exposed during search; final scores were not."
+  }
+}

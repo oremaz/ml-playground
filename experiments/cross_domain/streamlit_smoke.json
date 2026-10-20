@@ -1,0 +1,20 @@
+{
+  "method": "Streamlit AppTest on saved workspaces; no browser interaction or provider requests.",
+  "results": {
+    "energy": {
+      "status": "passed",
+      "result_tables": 1,
+      "notes_and_final_scores_rendered": true
+    },
+    "bikes": {
+      "status": "passed",
+      "result_tables": 1,
+      "notes_and_final_scores_rendered": true
+    },
+    "activity": {
+      "status": "passed",
+      "result_tables": 1,
+      "notes_and_final_scores_rendered": true
+    }
+  }
+}

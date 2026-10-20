@@ -1,0 +1,852 @@
+[
+  {
+    "trial": 1,
+    "measured": [
+      {
+        "id": "t1.constant_regressor.none.rmse",
+        "trial": 1,
+        "value": 100.7556244877,
+        "description": "constant_regressor/none: validation rmse = 100.756"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 107.4540409169,
+        "description": "lightgbm_regressor/none: validation rmse = 107.454"
+      },
+      {
+        "id": "t1.linear_regressor.none.rmse",
+        "trial": 1,
+        "value": 98.6345192603,
+        "description": "linear_regressor/none: validation rmse = 98.6345"
+      },
+      {
+        "id": "t1.random_forest_regressor.none.rmse",
+        "trial": 1,
+        "value": 121.4607417857,
+        "description": "random_forest_regressor/none: validation rmse = 121.461"
+      },
+      {
+        "id": "t1.xgboost_regressor.none.rmse",
+        "trial": 1,
+        "value": 147.9940143738,
+        "description": "xgboost_regressor/none: validation rmse = 147.994"
+      },
+      {
+        "id": "t1.random_forest_regressor.none.training.r2",
+        "trial": 1,
+        "value": 0.9500183635390589,
+        "description": "random_forest_regressor/none: in-sample training r2 = 0.950018"
+      },
+      {
+        "id": "t1.xgboost_regressor.none.training.r2",
+        "trial": 1,
+        "value": 0.8872660398483276,
+        "description": "xgboost_regressor/none: in-sample training r2 = 0.887266"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.training.r2",
+        "trial": 1,
+        "value": 0.7041664064879265,
+        "description": "lightgbm_regressor/none: in-sample training r2 = 0.704166"
+      },
+      {
+        "id": "t1.linear_regressor.none.custom_evening_17_22_mean_error",
+        "trial": 1,
+        "value": 11.914956188594276,
+        "description": "linear_regressor/none: validation custom_evening_17_22_mean_error = 11.915 on 2376 rows"
+      },
+      {
+        "id": "t1.constant_regressor.none.custom_evening_17_22_mean_error",
+        "trial": 1,
+        "value": -29.677123279661345,
+        "description": "constant_regressor/none: validation custom_evening_17_22_mean_error = -29.6771 on 2376 rows"
+      }
+    ],
+    "finding": "Baseline comparison completed: best validation rmse = 98.6345.",
+    "hypothesis": "Would strongly regularized trees (low learning rate, large minimum leaf size, subsampling) close their large train/validation gaps and beat the linear incumbent on fold-mean RMSE?",
+    "alternative": "They may only approach the constant's RMSE without beating the linear model, or their evening bias may worsen.",
+    "next_test": "Trial 2: linear control plus regularized LightGBM, XGBoost, and random forest on the same reviewed features.",
+    "distinguishes": "Fold-mean RMSE and evening 17-22 mean error of regularized trees versus the linear incumbent; it cannot identify whether the gap is noise, distribution shift, or a feature ceiling.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.5
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.02
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.min_child_samples",
+        "before": "(estimator default)",
+        "after": 200
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.reg_alpha",
+        "before": "(estimator default)",
+        "after": 1.0
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.reg_lambda",
+        "before": "(estimator default)",
+        "after": 10.0
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.subsample",
+        "before": "(estimator default)",
+        "after": 0.7
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.subsample_freq",
+        "before": "(estimator default)",
+        "after": 1
+      },
+      {
+        "setting": "model_params.random_forest_regressor.max_features",
+        "before": "(estimator default)",
+        "after": 0.5
+      },
+      {
+        "setting": "model_params.random_forest_regressor.min_samples_leaf",
+        "before": "(estimator default)",
+        "after": 50
+      },
+      {
+        "setting": "model_params.random_forest_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_regressor.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.5
+      },
+      {
+        "setting": "model_params.xgboost_regressor.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.02
+      },
+      {
+        "setting": "model_params.xgboost_regressor.max_depth",
+        "before": "(estimator default)",
+        "after": 3
+      },
+      {
+        "setting": "model_params.xgboost_regressor.min_child_weight",
+        "before": "(estimator default)",
+        "after": 200
+      },
+      {
+        "setting": "model_params.xgboost_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_regressor.reg_alpha",
+        "before": "(estimator default)",
+        "after": 1.0
+      },
+      {
+        "setting": "model_params.xgboost_regressor.reg_lambda",
+        "before": "(estimator default)",
+        "after": 10.0
+      },
+      {
+        "setting": "model_params.xgboost_regressor.subsample",
+        "before": "(estimator default)",
+        "after": 0.7
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "energy.csv is a single 19,735-row, 10-minute smart-house panel with no missing values; Appliances is a numeric Wh target with median 60, mean 97.7, and max 1080, suggesting right-skewed consumption that tree models can handle.",
+        "rv1 and rv2 have identical summary statistics and 19,735 unique values, consistent with random control columns; they should be excluded as non-informative noise.",
+        "lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, and Tdewpoint are excluded because the objective restricts inputs to T1..T9/RH_1..RH_9 and calendar information.",
+        "A temporal holdout on date is appropriate because the virtual meter must estimate the same interval from contemporaneous sensors and future intervals must not leak into training.",
+        "Evening 17-22 underestimation is best monitored as a diagnostic residual bias by hour; adding hour and is_evening_17_22 features may help the model learn time-of-day patterns without changing the primary RMSE objective.",
+        "This is a single-house estimation task; results should not be interpreted as transferable to new buildings."
+      ],
+      "questions": [
+        "Should evening 17-22 performance be a separate diagnostic, a weighted RMSE, or a hard constraint on underestimation?",
+        "Is Appliances the intended appliance-only target, or should lights be subtracted if the Appliances column includes lights?",
+        "Are T6 and RH_6 intended as indoor/building sensors, or should they be excluded if they represent outdoor conditions?"
+      ],
+      "preparation": "Use energy.csv as a single table with no joins. Parse date as datetime for temporal splitting and derive calendar features: hour, dayofweek, month, is_weekend, and is_evening_17_22. Target is Appliances. Exclude raw date, lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, Tdewpoint, rv1, and rv2. Features are the 18 allowed sensor columns T1, RH_1, T2, RH_2, T3, RH_3, T4, RH_4, T5, RH_5, T6, RH_6, T7, RH_7, T8, RH_8, T9, RH_9 plus the derived calendar features. Use standard preprocessing and a temporal holdout on date; evaluate overall RMSE and diagnostic residual bias for hours 17-22.",
+      "task": "regression",
+      "table": "energy.csv",
+      "target": "Appliances",
+      "features": [
+        "T1",
+        "RH_1",
+        "T2",
+        "RH_2",
+        "T3",
+        "RH_3",
+        "T4",
+        "RH_4",
+        "T5",
+        "RH_5",
+        "T6",
+        "RH_6",
+        "T7",
+        "RH_7",
+        "T8",
+        "RH_8",
+        "T9",
+        "RH_9",
+        "hour",
+        "dayofweek",
+        "month",
+        "is_weekend",
+        "is_evening_17_22"
+      ],
+      "models": [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "date",
+      "metric": "rmse",
+      "rationale": "Appliances is a defensible same-interval regression target for a virtual meter. The allowed inputs are contemporaneous room/building sensors and calendar features, so no lag or future-weather features are needed. A temporal split prevents leakage from future intervals. RMSE matches the stated overall error objective, while hour and is_evening_17_22 support diagnosing evening underestimation. Linear, random forest, LightGBM, and XGBoost provide a low-capacity control plus nonlinear CPU tabular models suitable for skewed, sensor-driven consumption.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "min_samples_leaf": 50,
+          "max_features": 0.5
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.02,
+          "min_child_samples": 200,
+          "subsample": 0.7,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.5,
+          "reg_alpha": 1.0,
+          "reg_lambda": 10.0
+        },
+        "xgboost_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.02,
+          "max_depth": 3,
+          "min_child_weight": 200,
+          "subsample": 0.7,
+          "colsample_bytree": 0.5,
+          "reg_alpha": 1.0,
+          "reg_lambda": 10.0
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/energy/memory/45366ecf4d3d4e9ebd7dd94862f85a7f/agents/7de70d3d0b8d45de9d199b3d5a6f3d99/validation_splits.json",
+      "_split_sha256": "f1189a881f8190a25745639fdfd89ffe97a26a1ac92a2aeb771791a43eb8f941",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 2,
+    "measured": [
+      {
+        "id": "t2.constant_regressor.none.rmse",
+        "trial": 2,
+        "value": 100.7556244877,
+        "description": "constant_regressor/none: validation rmse = 100.756"
+      },
+      {
+        "id": "t2.lightgbm_regressor.none.rmse",
+        "trial": 2,
+        "value": 93.7305186387,
+        "description": "lightgbm_regressor/none: validation rmse = 93.7305"
+      },
+      {
+        "id": "t2.linear_regressor.none.rmse",
+        "trial": 2,
+        "value": 98.6345192603,
+        "description": "linear_regressor/none: validation rmse = 98.6345"
+      },
+      {
+        "id": "t2.random_forest_regressor.none.rmse",
+        "trial": 2,
+        "value": 94.0636510457,
+        "description": "random_forest_regressor/none: validation rmse = 94.0637"
+      },
+      {
+        "id": "t2.xgboost_regressor.none.rmse",
+        "trial": 2,
+        "value": 93.2791011235,
+        "description": "xgboost_regressor/none: validation rmse = 93.2791"
+      },
+      {
+        "id": "t2.xgboost_regressor.none.custom_evening_17_22_mean_error",
+        "trial": 2,
+        "value": 13.782658460858586,
+        "description": "xgboost_regressor/none: validation custom_evening_17_22_mean_error = 13.7827 on 2376 rows"
+      },
+      {
+        "id": "t2.xgboost_regressor.none.delta_from_same_method_baseline",
+        "trial": 2,
+        "value": -54.714913250300015,
+        "description": "xgboost_regressor/none: rmse delta_from_same_method_baseline = -54.7149"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 93.2791; previous best = 98.6345. The measured selection score improved on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would removing the outdoor-looking sensors T6 and RH_6 improve fold-mean RMSE, or do they carry useful signal for this single house?",
+    "alternative": "Dropping them may worsen RMSE if they capture indoor patterns, or the change may be negligible within fold-to-fold variation.",
+    "next_test": "Trial 3: same regularized linear/RF/LightGBM/XGBoost with T6 and RH_6 removed from the reviewed feature set.",
+    "distinguishes": "Fold-mean RMSE and evening 17-22 mean error with versus without T6/RH_6; it cannot identify whether those sensors are outdoor or whether residual error is noise.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "features",
+        "before": [
+          "T1",
+          "RH_1",
+          "T2",
+          "RH_2",
+          "T3",
+          "RH_3",
+          "T4",
+          "RH_4",
+          "T5",
+          "RH_5",
+          "T6",
+          "RH_6",
+          "T7",
+          "RH_7",
+          "T8",
+          "RH_8",
+          "T9",
+          "RH_9",
+          "hour",
+          "dayofweek",
+          "month",
+          "is_weekend",
+          "is_evening_17_22"
+        ],
+        "after": [
+          "T1",
+          "RH_1",
+          "T2",
+          "RH_2",
+          "T3",
+          "RH_3",
+          "T4",
+          "RH_4",
+          "T5",
+          "RH_5",
+          "T7",
+          "RH_7",
+          "T8",
+          "RH_8",
+          "T9",
+          "RH_9",
+          "hour",
+          "dayofweek",
+          "month",
+          "is_weekend",
+          "is_evening_17_22"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "energy.csv is a single 19,735-row, 10-minute smart-house panel with no missing values; Appliances is a numeric Wh target with median 60, mean 97.7, and max 1080, suggesting right-skewed consumption that tree models can handle.",
+        "rv1 and rv2 have identical summary statistics and 19,735 unique values, consistent with random control columns; they should be excluded as non-informative noise.",
+        "lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, and Tdewpoint are excluded because the objective restricts inputs to T1..T9/RH_1..RH_9 and calendar information.",
+        "A temporal holdout on date is appropriate because the virtual meter must estimate the same interval from contemporaneous sensors and future intervals must not leak into training.",
+        "Evening 17-22 underestimation is best monitored as a diagnostic residual bias by hour; adding hour and is_evening_17_22 features may help the model learn time-of-day patterns without changing the primary RMSE objective.",
+        "This is a single-house estimation task; results should not be interpreted as transferable to new buildings."
+      ],
+      "questions": [
+        "Should evening 17-22 performance be a separate diagnostic, a weighted RMSE, or a hard constraint on underestimation?",
+        "Is Appliances the intended appliance-only target, or should lights be subtracted if the Appliances column includes lights?",
+        "Are T6 and RH_6 intended as indoor/building sensors, or should they be excluded if they represent outdoor conditions?"
+      ],
+      "preparation": "Use energy.csv as a single table with no joins. Parse date as datetime for temporal splitting and derive calendar features: hour, dayofweek, month, is_weekend, and is_evening_17_22. Target is Appliances. Exclude raw date, lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, Tdewpoint, rv1, and rv2. Features are the 18 allowed sensor columns T1, RH_1, T2, RH_2, T3, RH_3, T4, RH_4, T5, RH_5, T6, RH_6, T7, RH_7, T8, RH_8, T9, RH_9 plus the derived calendar features. Use standard preprocessing and a temporal holdout on date; evaluate overall RMSE and diagnostic residual bias for hours 17-22.",
+      "task": "regression",
+      "table": "energy.csv",
+      "target": "Appliances",
+      "features": [
+        "T1",
+        "RH_1",
+        "T2",
+        "RH_2",
+        "T3",
+        "RH_3",
+        "T4",
+        "RH_4",
+        "T5",
+        "RH_5",
+        "T7",
+        "RH_7",
+        "T8",
+        "RH_8",
+        "T9",
+        "RH_9",
+        "hour",
+        "dayofweek",
+        "month",
+        "is_weekend",
+        "is_evening_17_22"
+      ],
+      "models": [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "date",
+      "metric": "rmse",
+      "rationale": "Appliances is a defensible same-interval regression target for a virtual meter. The allowed inputs are contemporaneous room/building sensors and calendar features, so no lag or future-weather features are needed. A temporal split prevents leakage from future intervals. RMSE matches the stated overall error objective, while hour and is_evening_17_22 support diagnosing evening underestimation. Linear, random forest, LightGBM, and XGBoost provide a low-capacity control plus nonlinear CPU tabular models suitable for skewed, sensor-driven consumption.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "min_samples_leaf": 50,
+          "max_features": 0.5
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.02,
+          "min_child_samples": 200,
+          "subsample": 0.7,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.5,
+          "reg_alpha": 1.0,
+          "reg_lambda": 10.0
+        },
+        "xgboost_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.02,
+          "max_depth": 3,
+          "min_child_weight": 200,
+          "subsample": 0.7,
+          "colsample_bytree": 0.5,
+          "reg_alpha": 1.0,
+          "reg_lambda": 10.0
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/energy/memory/45366ecf4d3d4e9ebd7dd94862f85a7f/agents/7de70d3d0b8d45de9d199b3d5a6f3d99/validation_splits.json",
+      "_split_sha256": "f1189a881f8190a25745639fdfd89ffe97a26a1ac92a2aeb771791a43eb8f941",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 3,
+    "measured": [
+      {
+        "id": "t3.constant_regressor.none.rmse",
+        "trial": 3,
+        "value": 100.7556244877,
+        "description": "constant_regressor/none: validation rmse = 100.756"
+      },
+      {
+        "id": "t3.lightgbm_regressor.none.rmse",
+        "trial": 3,
+        "value": 93.2972959682,
+        "description": "lightgbm_regressor/none: validation rmse = 93.2973"
+      },
+      {
+        "id": "t3.linear_regressor.none.rmse",
+        "trial": 3,
+        "value": 99.0010027743,
+        "description": "linear_regressor/none: validation rmse = 99.001"
+      },
+      {
+        "id": "t3.random_forest_regressor.none.rmse",
+        "trial": 3,
+        "value": 93.7385808455,
+        "description": "random_forest_regressor/none: validation rmse = 93.7386"
+      },
+      {
+        "id": "t3.xgboost_regressor.none.rmse",
+        "trial": 3,
+        "value": 93.2738474276,
+        "description": "xgboost_regressor/none: validation rmse = 93.2738"
+      },
+      {
+        "id": "t3.xgboost_regressor.none.custom_evening_17_22_mean_error",
+        "trial": 3,
+        "value": 13.033375987373736,
+        "description": "xgboost_regressor/none: validation custom_evening_17_22_mean_error = 13.0334 on 2376 rows"
+      },
+      {
+        "id": "t3.lightgbm_regressor.none.custom_evening_17_22_mean_error",
+        "trial": 3,
+        "value": 11.48640218097643,
+        "description": "lightgbm_regressor/none: validation custom_evening_17_22_mean_error = 11.4864 on 2376 rows"
+      },
+      {
+        "id": "t3.change.0",
+        "trial": 3,
+        "value": {
+          "setting": "features",
+          "before": [
+            "T1",
+            "RH_1",
+            "T2",
+            "RH_2",
+            "T3",
+            "RH_3",
+            "T4",
+            "RH_4",
+            "T5",
+            "RH_5",
+            "T6",
+            "RH_6",
+            "T7",
+            "RH_7",
+            "T8",
+            "RH_8",
+            "T9",
+            "RH_9",
+            "hour",
+            "dayofweek",
+            "month",
+            "is_weekend",
+            "is_evening_17_22"
+          ],
+          "after": [
+            "T1",
+            "RH_1",
+            "T2",
+            "RH_2",
+            "T3",
+            "RH_3",
+            "T4",
+            "RH_4",
+            "T5",
+            "RH_5",
+            "T7",
+            "RH_7",
+            "T8",
+            "RH_8",
+            "T9",
+            "RH_9",
+            "hour",
+            "dayofweek",
+            "month",
+            "is_weekend",
+            "is_evening_17_22"
+          ]
+        },
+        "description": "Executed feature selection: 23 -> 21 features; exact lists in execution feedback."
+      }
+    ],
+    "finding": "This trial's best validation rmse = 93.2738; previous best = 93.2791. The measured selection score improved on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would adding temperature-humidity interaction features (T×RH products) improve fold-mean RMSE beyond the raw sensors?",
+    "alternative": "The products may be redundant with the raw T and RH inputs, leaving RMSE unchanged or slightly worse.",
+    "next_test": "Trial 4: same regularized linear/RF/LightGBM/XGBoost on the incumbent features plus 8 T×RH product features (rooms 1-5, 7-9).",
+    "distinguishes": "Fold-mean RMSE and evening 17-22 mean error with versus without the interaction features; it cannot identify whether residual error is noise or a feature ceiling.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "feature_recipes",
+        "before": [],
+        "after": [
+          {
+            "name": "T1xRH1",
+            "op": "product",
+            "left": "T1",
+            "right": "RH_1"
+          },
+          {
+            "name": "T2xRH2",
+            "op": "product",
+            "left": "T2",
+            "right": "RH_2"
+          },
+          {
+            "name": "T3xRH3",
+            "op": "product",
+            "left": "T3",
+            "right": "RH_3"
+          },
+          {
+            "name": "T4xRH4",
+            "op": "product",
+            "left": "T4",
+            "right": "RH_4"
+          },
+          {
+            "name": "T5xRH5",
+            "op": "product",
+            "left": "T5",
+            "right": "RH_5"
+          },
+          {
+            "name": "T7xRH7",
+            "op": "product",
+            "left": "T7",
+            "right": "RH_7"
+          },
+          {
+            "name": "T8xRH8",
+            "op": "product",
+            "left": "T8",
+            "right": "RH_8"
+          },
+          {
+            "name": "T9xRH9",
+            "op": "product",
+            "left": "T9",
+            "right": "RH_9"
+          }
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "energy.csv is a single 19,735-row, 10-minute smart-house panel with no missing values; Appliances is a numeric Wh target with median 60, mean 97.7, and max 1080, suggesting right-skewed consumption that tree models can handle.",
+        "rv1 and rv2 have identical summary statistics and 19,735 unique values, consistent with random control columns; they should be excluded as non-informative noise.",
+        "lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, and Tdewpoint are excluded because the objective restricts inputs to T1..T9/RH_1..RH_9 and calendar information.",
+        "A temporal holdout on date is appropriate because the virtual meter must estimate the same interval from contemporaneous sensors and future intervals must not leak into training.",
+        "Evening 17-22 underestimation is best monitored as a diagnostic residual bias by hour; adding hour and is_evening_17_22 features may help the model learn time-of-day patterns without changing the primary RMSE objective.",
+        "This is a single-house estimation task; results should not be interpreted as transferable to new buildings."
+      ],
+      "questions": [
+        "Should evening 17-22 performance be a separate diagnostic, a weighted RMSE, or a hard constraint on underestimation?",
+        "Is Appliances the intended appliance-only target, or should lights be subtracted if the Appliances column includes lights?",
+        "Are T6 and RH_6 intended as indoor/building sensors, or should they be excluded if they represent outdoor conditions?"
+      ],
+      "preparation": "Use energy.csv as a single table with no joins. Parse date as datetime for temporal splitting and derive calendar features: hour, dayofweek, month, is_weekend, and is_evening_17_22. Target is Appliances. Exclude raw date, lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, Tdewpoint, rv1, and rv2. Features are the 18 allowed sensor columns T1, RH_1, T2, RH_2, T3, RH_3, T4, RH_4, T5, RH_5, T6, RH_6, T7, RH_7, T8, RH_8, T9, RH_9 plus the derived calendar features. Use standard preprocessing and a temporal holdout on date; evaluate overall RMSE and diagnostic residual bias for hours 17-22.",
+      "task": "regression",
+      "table": "energy.csv",
+      "target": "Appliances",
+      "features": [
+        "T1",
+        "RH_1",
+        "T2",
+        "RH_2",
+        "T3",
+        "RH_3",
+        "T4",
+        "RH_4",
+        "T5",
+        "RH_5",
+        "T7",
+        "RH_7",
+        "T8",
+        "RH_8",
+        "T9",
+        "RH_9",
+        "hour",
+        "dayofweek",
+        "month",
+        "is_weekend",
+        "is_evening_17_22"
+      ],
+      "models": [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "date",
+      "metric": "rmse",
+      "rationale": "Appliances is a defensible same-interval regression target for a virtual meter. The allowed inputs are contemporaneous room/building sensors and calendar features, so no lag or future-weather features are needed. A temporal split prevents leakage from future intervals. RMSE matches the stated overall error objective, while hour and is_evening_17_22 support diagnosing evening underestimation. Linear, random forest, LightGBM, and XGBoost provide a low-capacity control plus nonlinear CPU tabular models suitable for skewed, sensor-driven consumption.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "min_samples_leaf": 50,
+          "max_features": 0.5
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.02,
+          "min_child_samples": 200,
+          "subsample": 0.7,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.5,
+          "reg_alpha": 1.0,
+          "reg_lambda": 10.0
+        },
+        "xgboost_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.02,
+          "max_depth": 3,
+          "min_child_weight": 200,
+          "subsample": 0.7,
+          "colsample_bytree": 0.5,
+          "reg_alpha": 1.0,
+          "reg_lambda": 10.0
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/energy/memory/45366ecf4d3d4e9ebd7dd94862f85a7f/agents/7de70d3d0b8d45de9d199b3d5a6f3d99/validation_splits.json",
+      "_split_sha256": "f1189a881f8190a25745639fdfd89ffe97a26a1ac92a2aeb771791a43eb8f941",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": [
+      {
+        "name": "T1xRH1",
+        "op": "product",
+        "left": "T1",
+        "right": "RH_1"
+      },
+      {
+        "name": "T2xRH2",
+        "op": "product",
+        "left": "T2",
+        "right": "RH_2"
+      },
+      {
+        "name": "T3xRH3",
+        "op": "product",
+        "left": "T3",
+        "right": "RH_3"
+      },
+      {
+        "name": "T4xRH4",
+        "op": "product",
+        "left": "T4",
+        "right": "RH_4"
+      },
+      {
+        "name": "T5xRH5",
+        "op": "product",
+        "left": "T5",
+        "right": "RH_5"
+      },
+      {
+        "name": "T7xRH7",
+        "op": "product",
+        "left": "T7",
+        "right": "RH_7"
+      },
+      {
+        "name": "T8xRH8",
+        "op": "product",
+        "left": "T8",
+        "right": "RH_8"
+      },
+      {
+        "name": "T9xRH9",
+        "op": "product",
+        "left": "T9",
+        "right": "RH_9"
+      }
+    ]
+  },
+  {
+    "trial": 4,
+    "measured": [
+      {
+        "id": "t4.constant_regressor.none.rmse",
+        "trial": 4,
+        "value": 100.7556244877,
+        "description": "constant_regressor/none: validation rmse = 100.756"
+      },
+      {
+        "id": "t4.lightgbm_regressor.none.rmse",
+        "trial": 4,
+        "value": 93.2972959682,
+        "description": "lightgbm_regressor/none: validation rmse = 93.2973"
+      },
+      {
+        "id": "t4.linear_regressor.none.rmse",
+        "trial": 4,
+        "value": 99.0010027743,
+        "description": "linear_regressor/none: validation rmse = 99.001"
+      },
+      {
+        "id": "t4.random_forest_regressor.none.rmse",
+        "trial": 4,
+        "value": 93.7385808455,
+        "description": "random_forest_regressor/none: validation rmse = 93.7386"
+      },
+      {
+        "id": "t4.xgboost_regressor.none.rmse",
+        "trial": 4,
+        "value": 93.2738474276,
+        "description": "xgboost_regressor/none: validation rmse = 93.2738"
+      },
+      {
+        "id": "t4.xgboost_regressor.none.custom_evening_17_22_mean_error",
+        "trial": 4,
+        "value": 13.033375987373736,
+        "description": "xgboost_regressor/none: validation custom_evening_17_22_mean_error = 13.0334 on 2376 rows"
+      },
+      {
+        "id": "t4.xgboost_regressor.none.custom_evening_17_22_rmse",
+        "trial": 4,
+        "value": 102.88718013394514,
+        "description": "xgboost_regressor/none: validation custom_evening_17_22_rmse = 102.887 on 2376 rows"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 93.2738; previous best = 93.2738. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "",
+    "alternative": "The calendar ablation and other feature/model settings remain untested; the residual error may reflect a feature ceiling, noise, or distribution shift, none of which is established by these trials.",
+    "next_test": "No further trial.",
+    "distinguishes": "The stop note records the current best (xgboost, 93.27 RMSE, evening mean error +13.03 Wh) and the unresolved questions; it does not identify a cause for the residual error.",
+    "decision": "stop",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+  }
+]

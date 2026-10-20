@@ -1,0 +1,118 @@
+{
+  "source": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_forecasting_20261017/validation/finance_agent/budget_3",
+  "new_fitting": false,
+  "previous_note": {
+    "trial": 3,
+    "measured": [
+      {
+        "id": "t3.lightgbm_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1270453243,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+      },
+      {
+        "id": "t3.random_forest_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1388223943,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.138822"
+      },
+      {
+        "id": "t3.random_forest_classifier.none.roc_auc",
+        "trial": 3,
+        "value": 0.6112824772,
+        "description": "random_forest_classifier/none: validation roc_auc = 0.611282"
+      },
+      {
+        "id": "t3.random_forest_classifier.none.delta_from_previous_incumbent",
+        "trial": 3,
+        "value": -0.001069234199999991,
+        "description": "random_forest_classifier/none: pr_auc delta_from_previous_incumbent = -0.00106923"
+      },
+      {
+        "id": "t1.random_forest_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1398916285,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.139892"
+      },
+      {
+        "id": "t2.random_forest_classifier.none.pr_auc",
+        "trial": 2,
+        "value": 0.1384576916,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.138458"
+      },
+      {
+        "id": "t1.lightgbm_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1270453243,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+      }
+    ],
+    "hypothesis": "Increasing RF ensemble size (32->400 trees, same depth, no class weight) did not raise pr_auc (0.1388 vs incumbent 0.1399, delta -0.0011) though ROC-AUC rose slightly (0.6103->0.6113). Small-ensemble variance is not the limiting factor; the incumbent's rare-event ranking appears near the ceiling of these features on this split.",
+    "alternative": "The residual train->validation gap (0.335->0.140) reflects temporal regime shift (2021->2022) rather than model capacity, so no further affordable change within the two approved tree families is expected to improve pr_auc.",
+    "next_test": "None; budget is spent (0 trials remaining) and the two reasoned changes (class balancing, ensemble size) both failed to beat the incumbent.",
+    "distinguishes": "Not applicable; stopping. The incumbent (trial 1, RF, pr_auc 0.1399) stands as the best measured configuration.",
+    "decision": "stop",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+  },
+  "new_note": {
+    "trial": 3,
+    "measured": [
+      {
+        "id": "t3.lightgbm_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1270453243,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+      },
+      {
+        "id": "t3.random_forest_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1388223943,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.138822"
+      },
+      {
+        "id": "t1.random_forest_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1398916285,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.139892"
+      },
+      {
+        "id": "t1.lightgbm_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1270453243,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+      },
+      {
+        "id": "t2.random_forest_classifier.none.pr_auc",
+        "trial": 2,
+        "value": 0.1384576916,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.138458"
+      },
+      {
+        "id": "t2.random_forest_classifier.none.recall_positive",
+        "trial": 2,
+        "value": 0.6109693878,
+        "description": "random_forest_classifier/none: validation recall_positive = 0.610969"
+      },
+      {
+        "id": "t1.random_forest_classifier.none.training.pr_auc",
+        "trial": 1,
+        "value": 0.3354533703104789,
+        "description": "random_forest_classifier/none: in-sample training pr_auc = 0.335453"
+      },
+      {
+        "id": "t1.lightgbm_classifier.none.training.pr_auc",
+        "trial": 1,
+        "value": 0.39106160213286145,
+        "description": "lightgbm_classifier/none: in-sample training pr_auc = 0.391062"
+      }
+    ],
+    "finding": "This trial's best validation pr_auc = 0.138822; previous best = 0.139892. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "",
+    "alternative": "The two RF changes (balanced class weights, 32 to 400 trees) did not improve pr_auc on this split; other settings, features, distribution shift and sampling variation remain untested.",
+    "next_test": "",
+    "distinguishes": "Measured contrast only: RF pr_auc moved from 0.1399 to 0.1385 with class weights (recall 0.019 to 0.611) and to 0.1388 with 400 trees, while LGBM stayed at 0.1270; this does not identify a cause or a ceiling.",
+    "decision": "stop",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+  },
+  "purpose": "Prompt replay on the same measured finance facts; not a new predictive experiment or blinded reasoning evaluation."
+}

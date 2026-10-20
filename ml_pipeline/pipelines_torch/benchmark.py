@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import logging
 from ml_pipeline.pipelines_torch.base import GeneralPipeline
-from ml_pipeline.utils.utils import save_model, save_metrics, model_exists
+from ml_pipeline.utils.utils import save_model, save_metrics, model_exists, _checkpoint_id, RESULTS_DIR_OUT
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,15 @@ class BenchmarkRunner:
                     "use_kfold": self.use_kfold,
                     "k_folds": self.k_folds,
                 }
+                if "use_mixed_precision" in model_cfg:
+                    metadata_core["use_mixed_precision"] = bool(model_cfg["use_mixed_precision"])
+                from pathlib import Path
+                from ml_pipeline.utils.training_checkpoint import atomic_save, load_checkpoint, restore_rng, rng_state
+                completed_rng = (Path(RESULTS_DIR_OUT) / self.path_start / ".restart" / _checkpoint_id(metadata_core) / "completed_rng.pt") if self.path_start is not None else None
                 if model_exists(metadata_core, path_start=self.path_start):
+                    saved_rng = load_checkpoint(completed_rng) if completed_rng is not None else None
+                    if saved_rng is not None:
+                        restore_rng(saved_rng["rng"])
                     logger.info("Skipping %s | %s (checkpoint already exists)", model_name, aug_name)
                     continue
                 
@@ -211,7 +219,7 @@ class BenchmarkRunner:
                         k_folds=self.k_folds,
                         max_factor=self.max_factor,
                         random_state=self.random_state,
-                        use_mixed_precision=self.use_mixed_precision,
+                        use_mixed_precision=model_cfg.get("use_mixed_precision", self.use_mixed_precision),
                     )
                 else:
                     pipeline = GeneralPipelineSklearn(
@@ -225,6 +233,10 @@ class BenchmarkRunner:
                         use_kfold=self.use_kfold,
                         k_folds=self.k_folds,
                     )
+                if self.path_start is not None:
+                    from pathlib import Path
+                    pipeline.restart_path = str(Path(RESULTS_DIR_OUT) / self.path_start / ".restart" / _checkpoint_id(metadata_core))
+                    pipeline.restart_context = metadata_core
                 wandb_run = None
                 if self.use_wandb:
                     from ml_pipeline.utils.wandb_utils import init_wandb_run
@@ -254,6 +266,8 @@ class BenchmarkRunner:
                     if cv_scores:
                         log_summary(wandb_run, {f"cv_{m}_mean": s["mean"] for m, s in cv_scores.items()})
                     finish_run(wandb_run)
+                if completed_rng is not None:
+                    atomic_save({"rng": rng_state()}, completed_rng)
                 
 
     def _resolve_epochs(self, model_name: str, model_idx: int) -> int:

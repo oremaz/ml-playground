@@ -1,0 +1,11 @@
+{
+  "domain": "energy",
+  "all_checked": true,
+  "checks": [
+    "saved preparation reproduced",
+    "original rows/targets preserved; model inputs independent of target values",
+    "future sensor perturbation cannot change past model inputs"
+  ],
+  "rows": 19735,
+  "features": 23
+}

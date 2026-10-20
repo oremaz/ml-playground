@@ -1,0 +1,38 @@
+{
+  "selection": {
+    "trial": 3,
+    "model": "xgboost_regressor",
+    "augmentation": "none",
+    "r2": 0.1407906016,
+    "rmse": 93.2738474276,
+    "mae": 56.2143923442,
+    "reference_r2": -0.0003679064,
+    "reference_rmse": 100.7556244877,
+    "reference_mae": 59.1097678746,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "test_rows": 3947,
+  "scores": {
+    "r2": -0.342745304107666,
+    "rmse": 105.49261304115089,
+    "mae": 82.96405792236328
+  },
+  "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+  "checkpoint_fold": 3,
+  "test_positive_prevalence": null,
+  "diagnostic_metrics": [
+    {
+      "name": "custom_evening_17_22_mean_error",
+      "kind": "mean_error",
+      "rows": 979,
+      "value": 49.0595513870816
+    },
+    {
+      "name": "custom_evening_17_22_rmse",
+      "kind": "rmse",
+      "rows": 979,
+      "value": 102.74947736630293
+    }
+  ]
+}

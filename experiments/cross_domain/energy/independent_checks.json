@@ -1,0 +1,144 @@
+{
+  "domain": "energy",
+  "native_calls_answered": 11,
+  "single_simulated_approval": true,
+  "trials": 5,
+  "notes": 5,
+  "no_final_feedback_to_llm": true,
+  "features": 25,
+  "train_rows": 12630,
+  "validation_rows": 3158,
+  "final_rows": 3947,
+  "selection_metric": "rmse",
+  "metric_definitions": [
+    {
+      "name": "custom_evening_mean_error",
+      "kind": "mean_error",
+      "where": [
+        {
+          "column": "is_evening",
+          "op": "eq",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "validation_baseline": 104.6528907344,
+  "validation_selected": 90.4839554363,
+  "final_baseline_vs_selected": {
+    "baseline": {
+      "trial": 1,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": -1.9320624146812801,
+        "rmse": 155.88769731202137,
+        "mae": 118.0019376952677
+      },
+      "diagnostic_metrics": [
+        {
+          "name": "custom_evening_mean_error",
+          "kind": "mean_error",
+          "rows": 979,
+          "value": 105.00343722825636
+        }
+      ]
+    },
+    "selected": {
+      "trial": 4,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": -0.45132912036391715,
+        "rmse": 109.67513840782168,
+        "mae": 81.98129147262007
+      },
+      "diagnostic_metrics": [
+        {
+          "name": "custom_evening_mean_error",
+          "kind": "mean_error",
+          "rows": 979,
+          "value": 68.44721865139249
+        }
+      ]
+    }
+  },
+  "fitted_replays": [
+    {
+      "trial": 1,
+      "model": "random_forest_regressor",
+      "scores": {
+        "r2": -0.5408093375448821,
+        "rmse": 121.57172222483254,
+        "mae": 80.94031032298923
+      }
+    },
+    {
+      "trial": 1,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": -0.14179003238677979,
+        "rmse": 104.65289073438201,
+        "mae": 65.2774429321289
+      }
+    },
+    {
+      "trial": 1,
+      "model": "xgboost_regressor",
+      "scores": {
+        "r2": -1.2751860618591309,
+        "rmse": 147.7292775759937,
+        "mae": 102.27095794677734
+      }
+    },
+    {
+      "trial": 2,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.06843990087509155,
+        "rmse": 94.52866732009132,
+        "mae": 56.097930908203125
+      }
+    },
+    {
+      "trial": 3,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.1305530071258545,
+        "rmse": 91.32289468556064,
+        "mae": 52.978424072265625
+      }
+    },
+    {
+      "trial": 4,
+      "model": "lightgbm_regressor",
+      "scores": {
+        "r2": 0.14645397663116455,
+        "rmse": 90.48395543634379,
+        "mae": 53.78008270263672
+      }
+    },
+    {
+      "trial": 5,
+      "model": "random_forest_regressor",
+      "scores": {
+        "r2": -0.5232127373302338,
+        "rmse": 120.87553230118966,
+        "mae": 80.96549240025332
+      }
+    }
+  ],
+  "interpretation": "Descriptive, adaptively selected validation comparison and a single reserved partition; no significance claim.",
+  "training_mean_reference": {
+    "prediction": 98.1686460807601,
+    "validation": {
+      "r2": -5.4178502127966155e-05,
+      "rmse": 97.94220623310267,
+      "mae": 56.31252228251141
+    },
+    "final": {
+      "r2": -0.00038730785809204527,
+      "rmse": 91.05615825114276,
+      "mae": 52.75285357591412
+    },
+    "purpose": "Training-only constant. Energy reference was computed after search. Bike/activity validation reference was exposed during search; final scores were not."
+  }
+}

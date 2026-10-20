@@ -1,0 +1,66 @@
+{
+  "insights": [
+    "Observed: bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; 731*24=17,544 expected hourly slots, so 165 hour slots are absent and previous-hour weather joins will produce NaNs at series starts or missing hours.",
+    "Observed: instant is unique and the original columns have no missing values, but derived previous-hour weather will have missing values whenever the prior hour is absent.",
+    "Observed: casual and registered are nonnegative and their means (35.7 and 153.8) suggest registered riders dominate the total cnt (mean 189.5); using them as features would leak the target because they are unavailable at the start of the hour and sum to the target.",
+    "Observed: current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and would leak if used directly; lagging them by one hour aligns them with information available at the start of the hour.",
+    "Hypothesis: calendar features (hr, weekday, workingday, season, mnth, holiday) and previous-hour weather will be the main drivers of hourly rental demand, with working-day commuter hours 7-9 and 16-19 likely having higher counts and larger RMSE impact.",
+    "Observed: the target becomes observable one hour after the hour starts, so a temporal split should purge training rows whose label_end is on or after the validation boundary to avoid temporal leakage."
+  ],
+  "questions": [
+    "Should the 165 missing hourly slots be treated as absent observations to exclude, or should they be inserted with NaN target and imputed before modeling?",
+    "Should we report a separate RMSE diagnostic for working-day commuter hours 7-9 and 16-19 while still selecting models on overall RMSE?",
+    "Is weathersit intended to be lagged as a previous-hour weather feature along with temp, atemp, hum, and windspeed?",
+    "Should rows where casual + registered != cnt be excluded or corrected as data-quality issues?"
+  ],
+  "preparation": "Create timestamp = dteday + hr as a datetime. Create label_end = timestamp + 1h and prev_timestamp = timestamp - 1h. Validate that timestamp is unique; if duplicates exist, flag them rather than silently joining. Self-join the table to itself as current c and previous p on p.timestamp = c.prev_timestamp to obtain previous-hour weather columns weathersit_prev, temp_prev, atemp_prev, hum_prev, and windspeed_prev. Validate cardinality by confirming the join does not fan out: the number of joined rows should equal the number of current rows and no current row should have more than one previous match. Keep NaN when no previous hour exists. Create is_commuter_focus = 1 when workingday == 1 and hr is in {7, 8, 9, 16, 17, 18, 19}, else 0. Use cnt as the target. Exclude instant, dteday, timestamp, label_end, prev_timestamp, current weathersit, current temp, current atemp, current hum, current windspeed, casual, registered, and cnt from features. Fit imputation and scaling on the training portion only, with median imputation for absent previous-hour weather.",
+  "task": "regression",
+  "table": "bikes.csv",
+  "target": "cnt",
+  "features": [
+    "season",
+    "yr",
+    "mnth",
+    "hr",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit_prev",
+    "temp_prev",
+    "atemp_prev",
+    "hum_prev",
+    "windspeed_prev",
+    "is_commuter_focus"
+  ],
+  "models": [
+    "random_forest_regressor",
+    "lightgbm_regressor",
+    "xgboost_regressor"
+  ],
+  "augmentations": [
+    "none"
+  ],
+  "preprocessing": "standard",
+  "split": "temporal",
+  "split_column": "timestamp",
+  "metric": "rmse",
+  "label_end_column": "label_end",
+  "rationale": "The objective is to predict a continuous hourly rental count from information available at the start of the hour, so this is a regression task. A temporal holdout on timestamp matches the operational setting and, with label_end = timestamp + 1h, purges training rows whose outcomes are not yet observable at the validation boundary. Features are limited to known calendar variables and previous-hour weather, avoiding current-hour weather, target components, target lags, and full-data learned transforms. Standard preprocessing is appropriate for the small numeric/categorical feature set and will impute absent previous-hour weather using training-only medians. Random Forest, LightGBM, and XGBoost are the allowed CPU models; run them with registry defaults (100 trees and at most 4 threads) as three of the five allowed trials, stopping early if validation RMSE plateaus. Overall RMSE is the requested selection metric, and the is_commuter_focus flag encodes the user's high-priority working-day peak hours while diagnostics can separately inspect those hours.",
+  "seed": 42,
+  "validation_fraction": 0.2,
+  "device": "cpu",
+  "model_params": {
+    "random_forest_regressor": {
+      "n_estimators": 100,
+      "n_jobs": 4
+    },
+    "lightgbm_regressor": {
+      "n_estimators": 100,
+      "n_jobs": 4
+    },
+    "xgboost_regressor": {
+      "n_estimators": 100,
+      "n_jobs": 4
+    }
+  }
+}

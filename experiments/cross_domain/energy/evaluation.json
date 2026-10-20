@@ -1,0 +1,28 @@
+{
+  "selection": {
+    "trial": 4,
+    "model": "lightgbm_regressor",
+    "augmentation": "none",
+    "r2": 0.1464539766,
+    "rmse": 90.4839554363,
+    "mae": 53.7800827026,
+    "completed_folds": 1,
+    "expected_folds": 1
+  },
+  "test_rows": 3947,
+  "scores": {
+    "r2": -0.45132912036391715,
+    "rmse": 109.67513840782168,
+    "mae": 81.98129147262007
+  },
+  "training_protocol": "Selected saved model, fitted on inner training only; no test-driven refit or selection.",
+  "test_positive_prevalence": null,
+  "diagnostic_metrics": [
+    {
+      "name": "custom_evening_mean_error",
+      "kind": "mean_error",
+      "rows": 979,
+      "value": 68.44721865139249
+    }
+  ]
+}

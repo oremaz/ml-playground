@@ -1,0 +1,28 @@
+{
+  "sources": {
+    "agent_workflow.py": "9406b5e0e905f5dd941478c628289e3116b2c900f34b1a36755766af515222be",
+    "agent_autonomy_experiment.py": "c6f6297612efed84c81b3017633e22430fdf3000a2814a319c982e70bd8bef1a",
+    "agent_finance_experiment.py": "7c564da6c6b63cec8f34bff79c41d1cc8abd18179e0c0021c5aaf0470bb5cc9e",
+    "agent_diagnostics.py": "189195f9dbeb5b0f262355803e2d52b635c7ecdd48fe8695330d1e25014402e2",
+    "agent_evidence.py": "87f3739b9251d15f8625c800f16d77812906445984b613a88f338e9bcb3caf71",
+    "agent_validation.py": "f3ae8ba55b264374be01df439f03542fb10e61da843075760c2b11051c2ab9dd",
+    "agent_evaluation.py": "69f941fb2c5e07435acdd5df886caa6a6f70f61d663edd4a4851ac5ae2ad55fc",
+    "agent_loop.py": "06e1c9c31bf2b2c5ded26bbc90861760b50ce63a1031f103e01fda16823684aa",
+    "agent_metrics.py": "631b8315de69dde20270731c871620073af5a9ab1de7eb6b2bef98aaaca7794c",
+    "agent_domain_experiment.py": "7abb91212e479baf66d3aa6b2bd1cea559d263570f6ee6333a77b2f095421341",
+    "benchmark_agent.py": "5531110abaaae55c9fcc6517c0f321fbc45bf09cabf6ec9f61bbd1d4b2ec9440",
+    "playground_runtime.py": "bb3a3e2a2c8dc9902ecf7bd3e570a0387d3a6e9b1e9c0a9901394f30a361b430",
+    "playground_app.py": "291df44590ae7a74dcc7cd3ad7655bcde40aa74f30db27408cef5a913dc9b3a3",
+    "pipelines_torch/models.py": "ce6413666e668a3a468080423623d6b77427d1843eb726f1d7b12226801d74c2",
+    "utils/local_qwen.py": "77276c035dfbd49ec2ef3216324dfe4174a04cdd650c137ac090f0b79b4faed6"
+  },
+  "settings": {
+    "provider": "local",
+    "model": "Qwen/Qwen3.8-27B",
+    "reasoning": "xhigh",
+    "device": "cuda",
+    "quantization": "none"
+  },
+  "slurm_job_id": "1324484",
+  "data_reuse": "Previously inspected public datasets; retrospective evaluation only."
+}

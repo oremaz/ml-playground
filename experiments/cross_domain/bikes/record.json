@@ -1,0 +1,193 @@
+{
+  "original_workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_domains_20261018/live_v1/bikes/memory/b7b75cc93f324110a9828ae5bd0614d9",
+  "original_agent": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_domains_20261018/live_v1/bikes/memory/b7b75cc93f324110a9828ae5bd0614d9/agents/f89e39fc7cb14c60a211a382224a6c02",
+  "observable_conversation": "messages.json",
+  "proposal_and_script_requests": "discovery.json",
+  "native_requests_and_tool_execution": "events.jsonl",
+  "private_thinking": "Not exported; token usage includes private reasoning.",
+  "preparation_check_note": "Temporal mutation checks passed.",
+  "llm_responses": [
+    {
+      "stage": "proposal",
+      "elapsed_seconds": 466.29172698402544,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 10179,
+        "prompt_tokens": 5893,
+        "total_tokens": 16072,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "stop"
+    },
+    {
+      "stage": "script_generation",
+      "elapsed_seconds": 409.62469485600013,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 9031,
+        "prompt_tokens": 7358,
+        "total_tokens": 16389,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "stop"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 34.31687239999883,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 738,
+        "prompt_tokens": 3941,
+        "total_tokens": 4679,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 19.945419981959276,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 408,
+        "prompt_tokens": 7468,
+        "total_tokens": 7876,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 29.182496529014315,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 591,
+        "prompt_tokens": 11266,
+        "total_tokens": 11857,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 52.11682032397948,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1080,
+        "prompt_tokens": 15145,
+        "total_tokens": 16225,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 110.57234592695022,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 2334,
+        "prompt_tokens": 18220,
+        "total_tokens": 20554,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 168.95335701003205,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 3649,
+        "prompt_tokens": 23592,
+        "total_tokens": 27241,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 68.33572677295888,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1378,
+        "prompt_tokens": 29140,
+        "total_tokens": 30518,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 183.2342794740107,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 3863,
+        "prompt_tokens": 34506,
+        "total_tokens": 38369,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 343.8208847549977,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 744,
+        "prompt_tokens": 39484,
+        "total_tokens": 40228,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "failures": [
+    {
+      "schema_version": 1,
+      "event_id": "f9af53a65a5542209bc6a46833b32631",
+      "timestamp": "2026-10-17T23:25:23.317526+00:00",
+      "event": "execution.error",
+      "operation": "agent.tool",
+      "operation_id": "4deff26e4fec4806914b0d872f15ac63",
+      "parent_id": null,
+      "run_id": null,
+      "data": {
+        "elapsed_seconds": 0.0031858269940130413,
+        "error_type": "ValueError",
+        "error": "Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+      }
+    }
+  ],
+  "context_source": null,
+  "trial_source": "provenance.json",
+  "runtime_source": "runtime_update.json",
+  "sha256": {
+    "notes.json": "0b3cf1c242049f7b04b3da68bf9eca679922484ec951d9c681bbda58be72905b",
+    "trial_results.csv": "56c3a060d2a7fe4f6f2f770a7d098e20c1acdc43a8674252675838ceba9f21de",
+    "proposal.json": "c486e374ffc303a817b21647f1affc9bb4ff85714f61a1d49497bd8ca997e487",
+    "messages.json": "cd73538e09c48f43d8529a8bd12ed6fb04475f7d0d6f0387223f34d3128ed5ba",
+    "reviewed_config.json": "70aa141460319c7d60b8616d8dc46d95888bb3dcf236cec6fff77ca931e5740f",
+    "result.json": "c56e1122c54ffc7633fa651e8d4d1eaf363ed60f90ffe0b8b51cfffe16a1c937",
+    "validation.png": "5343dac07871e131d9e33ba7127022d86a3c51b261334ddf581abf526163c0c5",
+    "review.json": "05fc64fb33ba03f674ed902463fe2188325eca3b51e5eeb974f563ebf9bf07e7",
+    "independent_checks.json": "9bd08db13990318fca1d5db3ef7525002b2f0d2348531353b1ed45902dbb73d3",
+    "preparation.py": "af689c896243c7d19d1df9a9bb7def4289fb2753617f1bcead39d0c3cc98e6ed",
+    "trials.json": "d85aead51e77d18bb29752d5fce638433283bdd409a0305e73c5c7ef86c843a3",
+    "events.jsonl": "d8b671035dfdd606b6cb39e279ccae81973f6f04e5add479136f666e0c28af1c",
+    "evaluation.json": "902f3c3b1d941caf75385ea86d4055280fbecda2a701609b1cfb8d4d5f8a0c6c",
+    "conversation.md": "370ed3cf0eced2c63f6b1a742264a2b89065faad961ac61011c0cff5594d8fe1",
+    "discovery.json": "a129bb1ad1252cd89805b9c67d19c7b80551d8258f993b0fda81f83f1103cb25",
+    "partitions.json": "3e95df40541404f6bd082c75c5865fff5d12fecc1f6a5f9c05b80c399f889043",
+    "preparation_checks.json": "d3d706c66003066e267a3587851edc987865056f10c375414a1979c1019dc4bc"
+  }
+}

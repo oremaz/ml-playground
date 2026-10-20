@@ -1,0 +1,5 @@
+{
+  "row_counts_and_targets_preserved": true,
+  "features_independent_of_target_values": true,
+  "future_sensor_mutation_cannot_change_past_inputs": false
+}

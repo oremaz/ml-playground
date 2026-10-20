@@ -1,0 +1,163 @@
+{
+  "settings": {
+    "provider": "local",
+    "model": "Qwen/Qwen3.8-27B",
+    "reasoning": "xhigh",
+    "device": "cuda",
+    "quantization": "none"
+  },
+  "comparison_identity": {
+    "datasets": {
+      "energy.csv": "2820bf712ad0275cb18b85a05250926100d8e65ebb9f4d2d016ca91ea152a25d"
+    },
+    "protocol": {
+      "task": "regression",
+      "target": "Appliances",
+      "metric": "rmse",
+      "seed": 42,
+      "split": "temporal",
+      "split_column": "date",
+      "label_end_column": null,
+      "validation_protocol": "robust",
+      "_split_sha256": "f1189a881f8190a25745639fdfd89ffe97a26a1ac92a2aeb771791a43eb8f941",
+      "model_workers": 3
+    },
+    "target_and_row_identity": "c64d3fadb15f952bbffeef9e64f34f67a6dc490d8fc74c5a70028797bda1f288",
+    "objective": "I have a smart-house sensor CSV and want a virtual meter: estimate appliance electricity\nconsumption in Wh for each ten-minute interval when the energy meter is unavailable. Sensors from\nthat same interval are available; this is estimation, not a future-weather forecast. Only room/building\ntemperature and humidity sensors (T1..T9, RH_1..RH_9) and calendar information are available inputs.\nThe lights meter and airport weather are unavailable inputs. Author metadata says rv1 and rv2 are\nrandom noise controls. Future intervals should be held out chronologically. I care about errors and\nsystematic underestimation during evening hours 17..22, in addition to overall RMSE. This is a single\nhouse: do not claim transfer to new buildings. Propose a suitable target, preparation and CPU models.\nAvailable resources: CPU Random Forest, LightGBM, XGBoost and the new regularized linear models from the registry. Optional pretrained backends are unavailable for these runs. Choose any promising families from those choices; the simulated user will approve your proposed families once. The runtime includes an untuned constant fallback automatically, so you need not request it. You can compare multiple approved models in every trial, with bounded parallel CPU fits. Use standard preprocessing initially. Primary metric and target follow the objective above. At most five trials; use diagnostics, feature subsets, and model-specific parameters when justified.",
+    "harness": {
+      "agent_loop.py": "06e1c9c31bf2b2c5ded26bbc90861760b50ce63a1031f103e01fda16823684aa",
+      "agent_workflow.py": "9406b5e0e905f5dd941478c628289e3116b2c900f34b1a36755766af515222be",
+      "agent_validation.py": "f3ae8ba55b264374be01df439f03542fb10e61da843075760c2b11051c2ab9dd",
+      "agent_diagnostics.py": "189195f9dbeb5b0f262355803e2d52b635c7ecdd48fe8695330d1e25014402e2",
+      "agent_metrics.py": "631b8315de69dde20270731c871620073af5a9ab1de7eb6b2bef98aaaca7794c",
+      "benchmark_agent.py": "5531110abaaae55c9fcc6517c0f321fbc45bf09cabf6ec9f61bbd1d4b2ec9440",
+      "playground_runtime.py": "bb3a3e2a2c8dc9902ecf7bd3e570a0387d3a6e9b1e9c0a9901394f30a361b430",
+      "pipelines_torch/models.py": "ce6413666e668a3a468080423623d6b77427d1843eb726f1d7b12226801d74c2",
+      "utils/local_qwen.py": "77276c035dfbd49ec2ef3216324dfe4174a04cdd650c137ac090f0b79b4faed6"
+    },
+    "max_trials": 5,
+    "approved_models": [
+      "lightgbm_regressor",
+      "linear_regressor",
+      "random_forest_regressor",
+      "xgboost_regressor"
+    ]
+  },
+  "comparison_fingerprint": "636e4779691a82cdbd03734b1e9c35bf010b090642d74a2383f387b3234f0868",
+  "completed": true,
+  "operator_interventions": 0,
+  "automatic_recoveries": [
+    {
+      "phase": "preparation",
+      "error": "ValueError: Local reasoning exhausted its token budget before producing an answer"
+    },
+    {
+      "phase": "agent",
+      "error": "ValueError: Local reasoning exhausted its token budget before producing an answer"
+    }
+  ],
+  "single_model_approval": true,
+  "native_tool_calls": 12,
+  "all_calls_answered": true,
+  "trials": 4,
+  "models_per_trial": [
+    [
+      "linear_regressor",
+      "random_forest_regressor",
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ],
+    [
+      "linear_regressor",
+      "random_forest_regressor",
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ],
+    [
+      "linear_regressor",
+      "random_forest_regressor",
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ],
+    [
+      "linear_regressor",
+      "random_forest_regressor",
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ]
+  ],
+  "selected": {
+    "trial": 3,
+    "model": "xgboost_regressor",
+    "augmentation": "none",
+    "r2": 0.1407906016,
+    "rmse": 93.2738474276,
+    "mae": 56.2143923442,
+    "reference_r2": -0.0003679064,
+    "reference_rmse": 100.7556244877,
+    "reference_mae": 59.1097678746,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 3,
+      "model": "xgboost_regressor",
+      "augmentation": "none",
+      "r2": 0.1407906016,
+      "rmse": 93.2738474276,
+      "mae": 56.2143923442,
+      "reference_r2": -0.0003679064,
+      "reference_rmse": 100.7556244877,
+      "reference_mae": 59.1097678746,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "test_rows": 3947,
+    "scores": {
+      "r2": -0.342745304107666,
+      "rmse": 105.49261304115089,
+      "mae": 82.96405792236328
+    },
+    "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+    "checkpoint_fold": 3,
+    "test_positive_prevalence": null,
+    "diagnostic_metrics": [
+      {
+        "name": "custom_evening_17_22_mean_error",
+        "kind": "mean_error",
+        "rows": 979,
+        "value": 49.0595513870816
+      },
+      {
+        "name": "custom_evening_17_22_rmse",
+        "kind": "rmse",
+        "rows": 979,
+        "value": 102.74947736630293
+      }
+    ]
+  },
+  "explanation_review_candidates": [
+    {
+      "trial": 1,
+      "field": "distinguishes",
+      "text": "Fold-mean RMSE and evening 17-22 mean error of regularized trees versus the linear incumbent; it cannot identify whether the gap is noise, distribution shift, or a feature ceiling."
+    },
+    {
+      "trial": 3,
+      "field": "distinguishes",
+      "text": "Fold-mean RMSE and evening 17-22 mean error with versus without the interaction features; it cannot identify whether residual error is noise or a feature ceiling."
+    },
+    {
+      "trial": 4,
+      "field": "alternative",
+      "text": "The calendar ablation and other feature/model settings remain untested; the residual error may reflect a feature ceiling, noise, or distribution shift, none of which is established by these trials."
+    }
+  ],
+  "explanation_review_note": "Keyword flags request human review; they are not unsupported-claim verdicts. Negated cautions may be flagged.",
+  "evaluation_caveat": "These four dataset final periods were inspected in earlier work. Reruns are retrospective, not fresh prospective tests."
+}

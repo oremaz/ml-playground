@@ -1,0 +1,5 @@
+{
+  "reason": "Script generation exhausted 16384 tokens before visible answer",
+  "change": "Explicit minimal identity-preparation instruction; same xhigh reasoning, model, reviewed features, split and budget. Original request/error retained.",
+  "previous_job": "1233157"
+}

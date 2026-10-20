@@ -1,0 +1,43 @@
+{
+  "insights": [
+    "sp500_stocks.csv has 1,891,536 rows, exactly 502 symbols x 3,768 dates, but 1,273,705 rows have missing price/volume values, leaving 617,831 usable price rows; the effective Friday decision sample will be smaller after 63-day warmup and 5-day future target requirements.",
+    "sp500_companies.csv has 502 unique Symbols and sp500_index.csv has 2,517 unique Dates, supporting many-to-one joins from stock rows to company metadata and index rows without cross-symbol joins.",
+    "The target, a 5% adjusted-close drop over the next five trading observations, is likely imbalanced, so pr_auc is a suitable primary metric and ROC-AUC/precision-recall diagnostics are important.",
+    "Only Sector is used from company metadata; it has no missing values, while other metadata fields have missingness and are excluded to avoid post-outcome, identifier, or current-size leakage.",
+    "The data are current S&P 500 constituents, so historical membership changes and survivorship bias are not represented; results describe past behavior of current constituents, not index membership at past dates.",
+    "Temporal leakage is possible if training rows have future labels overlapping the validation period; label_end_date purging is required for a valid chronological validation estimate."
+  ],
+  "questions": [
+    "Should the 5% drop be measured as close-to-close adjusted return from Friday close to the close five trading observations later (t to t+5), rather than using intraday Low?",
+    "Should raw current Close and Volume be included as additional features, or should the model use only the specified derived past features and Sector?",
+    "What chronological validation boundary should be used, for example the most recent 20% of Friday decision dates or a specific date?"
+  ],
+  "preparation": "Use sp500_stocks.csv as the primary panel. Join sp500_companies.csv on Symbol with a many-to-one cardinality check (companies.Symbol unique) and sp500_index.csv on Date with a many-to-one cardinality check (index.Date unique); do not join across symbols. Parse Date and keep rows where Date is Friday. For each Symbol ordered by Date, compute past-only features using Adj Close and Volume: ret_5 = Adj Close / Adj Close.shift(5) - 1; ret_21 = Adj Close / Adj Close.shift(21) - 1; ret_63 = Adj Close / Adj Close.shift(63) - 1; daily_ret = Adj Close.pct_change(); vol_21 = daily_ret.rolling(21).std(); volume_change_21 = log1p(Volume) - log1p(Volume.shift(21)). Compute index_ret_21 = S&P500 / S&P500.shift(21) - 1 on the index table and join it back by Date. Derive target drop5_next5 = 1 if Adj Close.shift(-5) / Adj Close - 1 <= -0.05 else 0, and label_end_date = Date.shift(-5) per Symbol. Retain only Friday rows with non-null required past features, non-null target, and non-null label_end_date; this drops warmup rows lacking 63 prior observations and end rows lacking five future observations, as well as rows with missing price/volume/index values. Retain Symbol as an audit column but exclude it from features. Exclude Date, Symbol, Adj Close, Close, High, Low, Open, Volume, label_end_date, target, and all company metadata except Sector from model inputs. Use chronological validation by Date with label-boundary purging: remove training rows whose label_end_date is on or after the validation start Date.",
+  "task": "classification",
+  "table": "sp500_stocks.csv",
+  "target": "drop5_next5",
+  "label_end_column": "label_end_date",
+  "features": [
+    "ret_5",
+    "ret_21",
+    "ret_63",
+    "vol_21",
+    "volume_change_21",
+    "index_ret_21",
+    "Sector"
+  ],
+  "models": [
+    "linear_classifier",
+    "random_forest_classifier",
+    "lightgbm_classifier",
+    "xgboost_classifier"
+  ],
+  "augmentations": [
+    "none"
+  ],
+  "preprocessing": "standard",
+  "split": "temporal",
+  "split_column": "Date",
+  "metric": "pr_auc",
+  "rationale": "The objective is to rank Friday decision rows by the probability of a future 5% adjusted-close drop, which is a binary classification problem. The derived target uses only the future adjusted close at t+5, while all features are past-only or static and known at Friday close. A temporal split with label_end_date purging avoids using training labels that overlap the validation period. pr_auc is the primary metric because the drop event is likely rare and ranking quality matters; ROC-AUC and precision/recall diagnostics can be inspected. The selected models cover a regularized linear control and CPU tree ensembles suitable for tabular features with mixed numeric and categorical inputs. These are validation estimates, not independent test performance, and do not imply trading edge or causality."
+}

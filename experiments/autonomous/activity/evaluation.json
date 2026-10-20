@@ -1,0 +1,40 @@
+{
+  "selection": {
+    "trial": 2,
+    "model": "xgboost_classifier",
+    "augmentation": "none",
+    "accuracy": 0.95030313,
+    "f1_macro": 0.9498272758,
+    "roc_auc": 0.9970160239,
+    "reference_accuracy": 0.1841067571,
+    "reference_f1_macro": 0.0518234379,
+    "reference_roc_auc": 0.5,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "test_rows": 2075,
+  "scores": {
+    "accuracy": 0.8597590361445783,
+    "f1_macro": 0.8636886358682258,
+    "roc_auc": 0.9763203883171082
+  },
+  "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+  "checkpoint_fold": 3,
+  "test_positive_prevalence": null,
+  "diagnostic_metrics": [
+    {
+      "name": "custom_sitting_recall",
+      "kind": "class_recall",
+      "rows": 2075,
+      "value": 0.7351351351351352,
+      "class_rows": 370
+    },
+    {
+      "name": "custom_standing_recall",
+      "kind": "class_recall",
+      "rows": 2075,
+      "value": 0.7809278350515464,
+      "class_rows": 388
+    }
+  ]
+}

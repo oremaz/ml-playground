@@ -1,0 +1,137 @@
+{
+  "settings": {
+    "provider": "local",
+    "model": "Qwen/Qwen3.8-27B",
+    "reasoning": "xhigh",
+    "device": "cuda",
+    "quantization": "none"
+  },
+  "comparison_identity": {
+    "datasets": {
+      "bikes.csv": "e03de4ee4ef4dc376ac6e04bf829673c6269e8eba5c60fa121640fa2f829504f"
+    },
+    "protocol": {
+      "task": "regression",
+      "target": "cnt",
+      "metric": "rmse",
+      "seed": 42,
+      "split": "temporal",
+      "split_column": "timestamp",
+      "label_end_column": "label_end",
+      "validation_protocol": "robust",
+      "_split_sha256": "dc3b6815afa9a11656004ec751ccc372a270621b118e3a0c06979d307032c523",
+      "model_workers": 3
+    },
+    "target_and_row_identity": "ad129bbb7d8d550a5675717fb4351ee55ad4955465e45759d7dadb279468a75a",
+    "objective": "I operate a bike-sharing service. At the START of an hour, estimate the total rental\ncount during that hour. Calendar information is known; weather observations are available only from\nthe PREVIOUS hour. The CSV contains the hour's realized weather, which must not be used directly.\nConstruct timestamps from dteday and hr, and join previous-hour weather at exactly timestamp minus\none hour with validated cardinality. Keep absent histories as NaN for train-fitted imputation. Current\nhour cnt, casual and registered are unavailable inputs; casual+registered equals the target, not a\nuseful predictive feature. instant is a record ID. Compare on chronologically later hours. Each rental\ncount becomes observable at timestamp plus one hour: provide a label_end_column for purging. I care\nespecially about commuter hours 7..9 and 16..19 on working days. Use overall RMSE for selection.\nPropose preparation and CPU models; do not use target lags or any full-data learned transform.\nAvailable resources: CPU Random Forest, LightGBM, XGBoost and the new regularized linear models from the registry. Optional pretrained backends are unavailable for these runs. Choose any promising families from those choices; the simulated user will approve your proposed families once. The runtime includes an untuned constant fallback automatically, so you need not request it. You can compare multiple approved models in every trial, with bounded parallel CPU fits. Use standard preprocessing initially. Primary metric and target follow the objective above. At most five trials; use diagnostics, feature subsets, and model-specific parameters when justified.",
+    "harness": {
+      "agent_loop.py": "06e1c9c31bf2b2c5ded26bbc90861760b50ce63a1031f103e01fda16823684aa",
+      "agent_workflow.py": "9406b5e0e905f5dd941478c628289e3116b2c900f34b1a36755766af515222be",
+      "agent_validation.py": "f3ae8ba55b264374be01df439f03542fb10e61da843075760c2b11051c2ab9dd",
+      "agent_diagnostics.py": "189195f9dbeb5b0f262355803e2d52b635c7ecdd48fe8695330d1e25014402e2",
+      "agent_metrics.py": "631b8315de69dde20270731c871620073af5a9ab1de7eb6b2bef98aaaca7794c",
+      "benchmark_agent.py": "5531110abaaae55c9fcc6517c0f321fbc45bf09cabf6ec9f61bbd1d4b2ec9440",
+      "playground_runtime.py": "bb3a3e2a2c8dc9902ecf7bd3e570a0387d3a6e9b1e9c0a9901394f30a361b430",
+      "pipelines_torch/models.py": "ce6413666e668a3a468080423623d6b77427d1843eb726f1d7b12226801d74c2",
+      "utils/local_qwen.py": "77276c035dfbd49ec2ef3216324dfe4174a04cdd650c137ac090f0b79b4faed6"
+    },
+    "max_trials": 5,
+    "approved_models": [
+      "lightgbm_regressor",
+      "linear_regressor",
+      "random_forest_regressor",
+      "xgboost_regressor"
+    ]
+  },
+  "comparison_fingerprint": "9b3acafbb1be31b460589ead5f3d59893706fd83230d89633aaa43c055854734",
+  "completed": true,
+  "operator_interventions": 0,
+  "automatic_recoveries": [],
+  "single_model_approval": true,
+  "native_tool_calls": 11,
+  "all_calls_answered": true,
+  "trials": 5,
+  "models_per_trial": [
+    [
+      "linear_regressor",
+      "random_forest_regressor",
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ],
+    [
+      "linear_regressor",
+      "random_forest_regressor",
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ],
+    [
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "random_forest_regressor",
+      "linear_regressor",
+      "constant_regressor"
+    ],
+    [
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "random_forest_regressor",
+      "linear_regressor",
+      "constant_regressor"
+    ],
+    [
+      "lightgbm_regressor",
+      "xgboost_regressor",
+      "constant_regressor"
+    ]
+  ],
+  "selected": {
+    "trial": 5,
+    "model": "xgboost_regressor",
+    "augmentation": "none",
+    "r2": 0.7428821325,
+    "rmse": 78.3292007811,
+    "mae": 53.8742949168,
+    "reference_r2": -0.1105278444,
+    "reference_rmse": 183.5022307321,
+    "reference_mae": 140.3135813485,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 5,
+      "model": "xgboost_regressor",
+      "augmentation": "none",
+      "r2": 0.7428821325,
+      "rmse": 78.3292007811,
+      "mae": 53.8742949168,
+      "reference_r2": -0.1105278444,
+      "reference_rmse": 183.5022307321,
+      "reference_mae": 140.3135813485,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "test_rows": 3476,
+    "scores": {
+      "r2": 0.910702645778656,
+      "rmse": 65.88673623513878,
+      "mae": 44.323028564453125
+    },
+    "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+    "checkpoint_fold": 3,
+    "test_positive_prevalence": null,
+    "diagnostic_metrics": [
+      {
+        "name": "custom_commuter_hour_rmse",
+        "kind": "rmse",
+        "rows": 687,
+        "value": 105.59498530301556
+      }
+    ]
+  },
+  "explanation_review_candidates": [],
+  "explanation_review_note": "Keyword flags request human review; they are not unsupported-claim verdicts. Negated cautions may be flagged.",
+  "evaluation_caveat": "These four dataset final periods were inspected in earlier work. Reruns are retrospective, not fresh prospective tests."
+}

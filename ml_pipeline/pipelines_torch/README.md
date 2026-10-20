@@ -1,6 +1,6 @@
 # Model Pipelines & Registry (`pipelines_torch`)
 
-This module provides a unified, extensible framework for training, evaluating, and benchmarking machine learning models across vision and tabular domains. It now includes lightweight integrations with several official 2024–2025 research repositories, semi-supervised training utilities, and advanced tabular augmentation strategies.
+Training, evaluation and benchmarking pipelines for tabular, text and vision models, with shared registries, augmentation utilities, semi-supervised training and checkpoint support.
 
 ---
 
@@ -55,6 +55,7 @@ Models are registered under descriptive keys. The following tables highlight the
 
 ### Classification Models (`models.py`)
 - `mlp_classifier`, `deep_mlp_classifier`: PyTorch MLPs (configurable depth, batchnorm, dropout)
+- `constant_classifier`, `linear_classifier`: training-prior and regularized logistic controls
 - `random_forest_classifier`, `xgboost_classifier`, `lightgbm_classifier`, `catboost_classifier`: Classical baselines
 - `stacking_classifier`: LightGBM + XGBoost + logistic stack with a logistic meta-learner
 - `tabicl_classifier`: TabICLv2 tabular foundation model (sklearn-compatible, `pip install tabicl`, loads the `tabicl-classifier-v2-*` checkpoint by default)
@@ -63,11 +64,31 @@ Models are registered under descriptive keys. The following tables highlight the
 
 ### Regression Models (`models.py`)
 - `mlp_regressor`, `deep_mlp_regressor`: PyTorch MLPs
+- `constant_regressor`, `linear_regressor`: training-mean and Ridge controls
 - `random_forest_regressor`, `xgboost_regressor`, `lightgbm_regressor`, `catboost_regressor`
 - `stacking_regressor`: Per-target LightGBM + XGBoost + ridge stack with a RidgeCV meta-learner
 - `tabicl_regressor`: TabICLv2 tabular foundation model for regression (quantile-based predictions)
 - `tabfm_regressor`: Google TabFM zero-shot foundation model for regression
 - `hf_lora_regressor`, `hf_qlora_regressor`, `llama_cpp_regressor`
+
+### Forecasting models (`FORECASTING_MODEL_REGISTRY`)
+
+The separate zero-shot forecasting family includes `timestral_209m`,
+`toto_2_0_4m`, `toto_2_0_22m`, `toto_2_0_313m`, `toto_2_0_1b`,
+`toto_2_0_2_5b`, `timesfm_3_0`, `chronos_2`, `naive_forecaster`, and
+`seasonal_naive_forecaster`. These names also appear in the combined registry.
+Adapters implement `forecast(contexts, horizon)`, returning median forecasts and,
+for foundation models, common quantiles. They load optional dependencies and
+weights lazily. They do not implement tabular classification or `predict_proba`.
+
+Use `ml_pipeline.playground_runtime.benchmark` with `task="forecasting"` and
+time/series/horizon configuration, or `forecasting_runtime.benchmark_forecasting`
+directly. The existing `BenchmarkRunner(X, y)` training workflow remains for
+classification/regression. The forecasting runtime shares origins across methods,
+uses only past history per entity, and saves predictions, revisions and errors.
+See the [project README](../../README.md#models-and-evaluation) for installation
+and supported model families, and [adapter metadata](../forecasting_models.py)
+for checkpoint and license information.
 
 ### Vision Models (`vision_models.py`)
 - `simple_cnn`, `adaptive_cnn`, `residual_cnn`: Lightweight CNN baselines
@@ -158,3 +179,35 @@ results_df = runner.run(X, y)
 - Register all new models and augmentations to keep experiments reproducible.
 - Integrate with semi-supervised utilities when working with partially labeled datasets.
 - Save models, logs, and augmentation parameters for later audits.
+
+### Resuming interrupted training
+
+`BenchmarkRunner` assigns a separate restart directory to each model and
+augmentation configuration under `results/<run>/.restart/`. Torch fitting saves
+model and best validation weights, optimizer, scheduler, mixed precision scaler,
+shuffle state, random streams and training progress atomically. A scheduler
+`SIGUSR1` or `SIGTERM` requests a save at the next completed minibatch and raises
+`CheckpointPause`. Running the same configuration and data again restores the
+saved state. Float32 NumPy inputs share tensor storage when their representation
+allows it.
+
+Hugging Face QLoRA fitting uses native Trainer checkpoints, including optimizer,
+scheduler, scaler and RNG files. The checkpoint directory becomes visible only
+after all files are saved. Best-model paths are remapped when the atomic staging
+directory is committed. Completed models preserve the random streams used to
+initialize later benchmark models.
+
+Classical k-fold fitting saves each completed fold and the final full-data fit.
+An unfinished classical fit restarts that fold because arbitrary estimators do
+not expose resumable optimizer state. Restart validation rejects changed data
+or configuration. These restart files complement the final model registry.
+
+Text classifiers align both nested and outer special-token IDs with their
+tokenizer. Attached Gemma 4 and causal fallback heads normalize PEFT's forwarded
+hidden-state option before calling the backbone.
+
+Saved QLoRA classifiers use the same architecture-specific head loader as
+training, including Gemma 4, Nanbeige and LFM. Explicit CPU reload requests are
+honored even when CUDA is available. Attached heads declare mean-loss gradient
+accumulation semantics, consume Trainer-only keyword arguments and disable
+unused decoding caches.

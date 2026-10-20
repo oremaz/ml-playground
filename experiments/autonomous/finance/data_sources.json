@@ -1,0 +1,14 @@
+{
+  "sp500_stocks.csv": {
+    "path": "data/table_0.csv",
+    "sha256": "1700c1578682e4ed3d1b0394236d0fe8f44a0ebea15a3fbf7d22b93187c5af83"
+  },
+  "sp500_companies.csv": {
+    "path": "data/table_1.csv",
+    "sha256": "58a4bbd983869c06f22d1ea40fde5f3a921866de685c68cfaf2c8556a2d117f9"
+  },
+  "sp500_index.csv": {
+    "path": "data/table_2.csv",
+    "sha256": "9c56f1744c5518715febc5415787cadaf98cb55139b77a048260ceae4eca6684"
+  }
+}

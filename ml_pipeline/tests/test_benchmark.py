@@ -87,8 +87,10 @@ class TestResolveEpochs:
 
 
 class TestBenchmarkRunSmoke:
-    def test_run_tiny_model(self, synthetic_classification_data, tmp_path):
+    def test_run_tiny_model(self, synthetic_classification_data, tmp_path, monkeypatch):
         """Smoke test: run benchmark with 1 tiny model, no augmentation."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("ml_pipeline.pipelines_torch.benchmark.RESULTS_DIR_OUT", str(tmp_path / "results"))
         X, y = synthetic_classification_data
 
         class TinyMLP(torch.nn.Module):
@@ -125,3 +127,30 @@ class TestBenchmarkRunSmoke:
             # Patch save_path to use tmp dir
             runner.save_path = os.path.join(results_dir, "smoke_test")
             runner.run(X, y)
+
+
+def test_skipping_completed_model_restores_rng_for_later_initialization(tmp_path, monkeypatch):
+    import ml_pipeline.pipelines_torch.benchmark as module
+    from ml_pipeline.utils.training_checkpoint import atomic_save, rng_state
+    from ml_pipeline.utils.utils import _checkpoint_id
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(module, 'RESULTS_DIR_OUT', str(tmp_path))
+    monkeypatch.setattr(module, 'model_exists', lambda *args, **kwargs: True)
+    runner = BenchmarkRunner(
+        model_configs=[{'name': 'model', 'class': torch.nn.Linear,
+                        'params': {'in_features': 3, 'out_features': 2}}],
+        augmentations=[None], epochs=2, batch_size=4, use_kfold=False, path_start='resume',
+    )
+    metadata = {'model_name': 'model', 'augmentation_name': 'none',
+                'task_type': 'classification', 'epochs': 2,
+                'learning_rate': runner.learning_rate if runner.learning_rate is not None else 1e-4,
+                'weight_decay': runner.weight_decay, 'dropout': runner.dropout,
+                'batch_size': 4, 'use_kfold': False, 'k_folds': runner.k_folds}
+    set_all_seeds(11)
+    state = rng_state()
+    expected = torch.nn.Linear(3, 2).weight.detach().clone()
+    atomic_save({'rng': state}, tmp_path / 'resume/.restart' / _checkpoint_id(metadata) / 'completed_rng.pt')
+    set_all_seeds(98)
+    runner.run(np.ones((8, 3)), np.arange(8) % 2)
+    torch.testing.assert_close(torch.nn.Linear(3, 2).weight, expected, rtol=0, atol=0)

@@ -1,0 +1,415 @@
+{
+  "source_run": "results/agent_forecasting_20261017/validation/finance_agent/budget_3",
+  "date": "2026-10-18",
+  "model": "Qwen/Qwen3.8-27B",
+  "reasoning": "xhigh",
+  "trials": [
+    {
+      "trial": 1,
+      "model": "lightgbm_classifier",
+      "augmentation": "none",
+      "accuracy": 0.6770791075,
+      "f1_macro": 0.5059810825,
+      "precision_positive": 0.1449756529,
+      "recall_positive": 0.4177295918,
+      "roc_auc": 0.5715860326,
+      "pr_auc": 0.1270453243,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 1,
+      "model": "random_forest_classifier",
+      "augmentation": "none",
+      "accuracy": 0.8759972955,
+      "f1_macro": 0.4827180599,
+      "precision_positive": 0.0920245399,
+      "recall_positive": 0.0191326531,
+      "roc_auc": 0.6103040667,
+      "pr_auc": 0.1398916285,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 2,
+      "model": "lightgbm_classifier",
+      "augmentation": "none",
+      "accuracy": 0.6770791075,
+      "f1_macro": 0.5059810825,
+      "precision_positive": 0.1449756529,
+      "recall_positive": 0.4177295918,
+      "roc_auc": 0.5715860326,
+      "pr_auc": 0.1270453243,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 2,
+      "model": "random_forest_classifier",
+      "augmentation": "none",
+      "accuracy": 0.5507099391,
+      "f1_macro": 0.4538315462,
+      "precision_positive": 0.136994137,
+      "recall_positive": 0.6109693878,
+      "roc_auc": 0.6061579109,
+      "pr_auc": 0.1384576916,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 3,
+      "model": "lightgbm_classifier",
+      "augmentation": "none",
+      "accuracy": 0.6770791075,
+      "f1_macro": 0.5059810825,
+      "precision_positive": 0.1449756529,
+      "recall_positive": 0.4177295918,
+      "roc_auc": 0.5715860326,
+      "pr_auc": 0.1270453243,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 3,
+      "model": "random_forest_classifier",
+      "augmentation": "none",
+      "accuracy": 0.8760649087,
+      "f1_macro": 0.4822360142,
+      "precision_positive": 0.0897832817,
+      "recall_positive": 0.018494898,
+      "roc_auc": 0.6112824772,
+      "pr_auc": 0.1388223943,
+      "completed_folds": 1,
+      "expected_folds": 1
+    }
+  ],
+  "notes": [
+    {
+      "trial": 1,
+      "measured": [
+        {
+          "id": "t1.lightgbm_classifier.none.pr_auc",
+          "trial": 1,
+          "value": 0.1270453243,
+          "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.pr_auc",
+          "trial": 1,
+          "value": 0.1398916285,
+          "description": "random_forest_classifier/none: validation pr_auc = 0.139892"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.training.pr_auc",
+          "trial": 1,
+          "value": 0.3354533703104789,
+          "description": "random_forest_classifier/none: in-sample training pr_auc = 0.335453"
+        },
+        {
+          "id": "t1.lightgbm_classifier.none.training.pr_auc",
+          "trial": 1,
+          "value": 0.39106160213286145,
+          "description": "lightgbm_classifier/none: in-sample training pr_auc = 0.391062"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.recall_positive",
+          "trial": 1,
+          "value": 0.0191326531,
+          "description": "random_forest_classifier/none: validation recall_positive = 0.0191327"
+        },
+        {
+          "id": "t1.lightgbm_classifier.none.recall_positive",
+          "trial": 1,
+          "value": 0.4177295918,
+          "description": "lightgbm_classifier/none: validation recall_positive = 0.41773"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.roc_auc",
+          "trial": 1,
+          "value": 0.6103040667,
+          "description": "random_forest_classifier/none: validation roc_auc = 0.610304"
+        },
+        {
+          "id": "t1.lightgbm_classifier.none.roc_auc",
+          "trial": 1,
+          "value": 0.5715860326,
+          "description": "lightgbm_classifier/none: validation roc_auc = 0.571586"
+        }
+      ],
+      "hypothesis": "RF (incumbent, pr_auc 0.1399) is unbalanced and very conservative (326 predicted positives, 30 TP, default recall 0.019), so its probability estimates are compressed toward the majority class and under-rank rare drops. Explicit class_weight='balanced' should sharpen the minority-class ranking and raise pr_auc.",
+      "alternative": "The large train→validation gap (0.335→0.140) is driven by temporal regime shift (2021→2022, pr_auc/prevalence 1.53→1.05) rather than class imbalance, so balancing will not move pr_auc much and the ranking is near the ceiling of these features.",
+      "next_test": "RF with class_weight='balanced', keeping n_estimators=32 and max_depth=8 unchanged; LightGBM stays at reviewed baseline (auto-balanced). Isolates the effect of balancing on the incumbent's rare-event ranking.",
+      "distinguishes": "If balanced RF pr_auc rises above 0.1399, the incumbent's ranking was limited by conservative (unbalanced) probability estimates and balancing is the lever. If it stays flat or drops, the gap is more likely temporal shift / feature ceiling, and balancing is not the right change.",
+      "decision": "continue",
+      "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+      "next_changes": [
+        {
+          "setting": "model_params.random_forest_classifier.class_weight",
+          "before": "(estimator default)",
+          "after": "balanced"
+        }
+      ],
+      "next_config": {
+        "task": "classification",
+        "table": "sp500_stocks.csv",
+        "target": "large_drop_next_week",
+        "features": [
+          "trailing_5_return",
+          "trailing_21_return",
+          "trailing_63_return",
+          "trailing_21_volatility",
+          "trailing_21_volume_change",
+          "Sector",
+          "sp500_trailing_21_return"
+        ],
+        "models": [
+          "random_forest_classifier",
+          "lightgbm_classifier"
+        ],
+        "augmentations": [
+          "none"
+        ],
+        "preprocessing": "standard",
+        "split": "temporal",
+        "split_column": "Date",
+        "metric": "pr_auc",
+        "label_end_column": "label_end_date",
+        "seed": 42,
+        "folds": 5,
+        "validation_fraction": 0.2,
+        "epochs": 10,
+        "device": "cpu",
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "max_factor": 2.0,
+        "model_params": {
+          "random_forest_classifier": {
+            "n_estimators": 32,
+            "max_depth": 8,
+            "n_jobs": 4,
+            "class_weight": "balanced"
+          },
+          "lightgbm_classifier": {
+            "n_estimators": 60,
+            "num_leaves": 15,
+            "n_jobs": 4
+          }
+        },
+        "save_predictions": true,
+        "strict_model_params": true,
+        "use_class_weights": true
+      },
+      "next_recipes": []
+    },
+    {
+      "trial": 2,
+      "measured": [
+        {
+          "id": "t2.lightgbm_classifier.none.pr_auc",
+          "trial": 2,
+          "value": 0.1270453243,
+          "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+        },
+        {
+          "id": "t2.random_forest_classifier.none.pr_auc",
+          "trial": 2,
+          "value": 0.1384576916,
+          "description": "random_forest_classifier/none: validation pr_auc = 0.138458"
+        },
+        {
+          "id": "t2.random_forest_classifier.none.recall_positive",
+          "trial": 2,
+          "value": 0.6109693878,
+          "description": "random_forest_classifier/none: validation recall_positive = 0.610969"
+        },
+        {
+          "id": "t2.random_forest_classifier.none.precision_positive",
+          "trial": 2,
+          "value": 0.136994137,
+          "description": "random_forest_classifier/none: validation precision_positive = 0.136994"
+        },
+        {
+          "id": "t2.random_forest_classifier.none.roc_auc",
+          "trial": 2,
+          "value": 0.6061579109,
+          "description": "random_forest_classifier/none: validation roc_auc = 0.606158"
+        },
+        {
+          "id": "t2.random_forest_classifier.none.delta_from_previous_incumbent",
+          "trial": 2,
+          "value": -0.0014339369000000157,
+          "description": "random_forest_classifier/none: pr_auc delta_from_previous_incumbent = -0.00143394"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.pr_auc",
+          "trial": 1,
+          "value": 0.1398916285,
+          "description": "random_forest_classifier/none: validation pr_auc = 0.139892"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.training.pr_auc",
+          "trial": 1,
+          "value": 0.3354533703104789,
+          "description": "random_forest_classifier/none: in-sample training pr_auc = 0.335453"
+        }
+      ],
+      "hypothesis": "Balancing RF (class_weight='balanced') did not raise pr_auc (0.1385 vs incumbent 0.1399, delta -0.0014) though it moved threshold behavior (recall 0.019->0.611). The incumbent's ranking is not limited by conservative probability estimates; the remaining suspect is ensemble variance from only 32 trees. Increasing n_estimators to 400 at the same max_depth=8 (no class weight) should reduce variance in probability estimates and raise pr_auc.",
+      "alternative": "The train->validation gap (0.335->0.140) is temporal regime shift (2021->2022) rather than ensemble noise, so more trees at the same depth will not move pr_auc and the feature set is near its ceiling.",
+      "next_test": "RF with n_estimators=400, max_depth=8, n_jobs=4, no class_weight (reverts to incumbent settings except tree count); LightGBM stays at reviewed baseline. Isolates the effect of ensemble size on the incumbent's ranking.",
+      "distinguishes": "If 400-tree RF pr_auc exceeds 0.1399, the incumbent's ranking was limited by small-ensemble variance and more trees are the lever. If it stays flat or drops, the gap is more consistent with temporal shift / feature ceiling, and no further affordable change is justified.",
+      "decision": "continue",
+      "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+      "next_changes": [
+        {
+          "setting": "model_params.random_forest_classifier.n_estimators",
+          "before": 32,
+          "after": 400
+        }
+      ],
+      "next_config": {
+        "task": "classification",
+        "table": "sp500_stocks.csv",
+        "target": "large_drop_next_week",
+        "features": [
+          "trailing_5_return",
+          "trailing_21_return",
+          "trailing_63_return",
+          "trailing_21_volatility",
+          "trailing_21_volume_change",
+          "Sector",
+          "sp500_trailing_21_return"
+        ],
+        "models": [
+          "random_forest_classifier",
+          "lightgbm_classifier"
+        ],
+        "augmentations": [
+          "none"
+        ],
+        "preprocessing": "standard",
+        "split": "temporal",
+        "split_column": "Date",
+        "metric": "pr_auc",
+        "label_end_column": "label_end_date",
+        "seed": 42,
+        "folds": 5,
+        "validation_fraction": 0.2,
+        "epochs": 10,
+        "device": "cpu",
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "max_factor": 2.0,
+        "model_params": {
+          "random_forest_classifier": {
+            "n_estimators": 400,
+            "max_depth": 8,
+            "n_jobs": 4
+          },
+          "lightgbm_classifier": {
+            "n_estimators": 60,
+            "num_leaves": 15,
+            "n_jobs": 4
+          }
+        },
+        "save_predictions": true,
+        "strict_model_params": true,
+        "use_class_weights": true
+      },
+      "next_recipes": []
+    },
+    {
+      "trial": 3,
+      "measured": [
+        {
+          "id": "t3.lightgbm_classifier.none.pr_auc",
+          "trial": 3,
+          "value": 0.1270453243,
+          "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+        },
+        {
+          "id": "t3.random_forest_classifier.none.pr_auc",
+          "trial": 3,
+          "value": 0.1388223943,
+          "description": "random_forest_classifier/none: validation pr_auc = 0.138822"
+        },
+        {
+          "id": "t3.random_forest_classifier.none.roc_auc",
+          "trial": 3,
+          "value": 0.6112824772,
+          "description": "random_forest_classifier/none: validation roc_auc = 0.611282"
+        },
+        {
+          "id": "t3.random_forest_classifier.none.delta_from_previous_incumbent",
+          "trial": 3,
+          "value": -0.001069234199999991,
+          "description": "random_forest_classifier/none: pr_auc delta_from_previous_incumbent = -0.00106923"
+        },
+        {
+          "id": "t1.random_forest_classifier.none.pr_auc",
+          "trial": 1,
+          "value": 0.1398916285,
+          "description": "random_forest_classifier/none: validation pr_auc = 0.139892"
+        },
+        {
+          "id": "t2.random_forest_classifier.none.pr_auc",
+          "trial": 2,
+          "value": 0.1384576916,
+          "description": "random_forest_classifier/none: validation pr_auc = 0.138458"
+        },
+        {
+          "id": "t1.lightgbm_classifier.none.pr_auc",
+          "trial": 1,
+          "value": 0.1270453243,
+          "description": "lightgbm_classifier/none: validation pr_auc = 0.127045"
+        }
+      ],
+      "hypothesis": "Increasing RF ensemble size (32->400 trees, same depth, no class weight) did not raise pr_auc (0.1388 vs incumbent 0.1399, delta -0.0011) though ROC-AUC rose slightly (0.6103->0.6113). Small-ensemble variance is not the limiting factor; the incumbent's rare-event ranking appears near the ceiling of these features on this split.",
+      "alternative": "The residual train->validation gap (0.335->0.140) reflects temporal regime shift (2021->2022) rather than model capacity, so no further affordable change within the two approved tree families is expected to improve pr_auc.",
+      "next_test": "None; budget is spent (0 trials remaining) and the two reasoned changes (class balancing, ensemble size) both failed to beat the incumbent.",
+      "distinguishes": "Not applicable; stopping. The incumbent (trial 1, RF, pr_auc 0.1399) stands as the best measured configuration.",
+      "decision": "stop",
+      "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+    }
+  ],
+  "selected": {
+    "trial": 1,
+    "model": "random_forest_classifier",
+    "augmentation": "none",
+    "accuracy": 0.8759972955,
+    "f1_macro": 0.4827180599,
+    "precision_positive": 0.0920245399,
+    "recall_positive": 0.0191326531,
+    "roc_auc": 0.6103040667,
+    "pr_auc": 0.1398916285,
+    "completed_folds": 1,
+    "expected_folds": 1
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 1,
+      "model": "random_forest_classifier",
+      "augmentation": "none",
+      "accuracy": 0.8759972955,
+      "f1_macro": 0.4827180599,
+      "precision_positive": 0.0920245399,
+      "recall_positive": 0.0191326531,
+      "roc_auc": 0.6103040667,
+      "pr_auc": 0.1398916285,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    "test_rows": 18629,
+    "scores": {
+      "accuracy": 0.9346717483493477,
+      "f1_macro": 0.48311645070891485,
+      "precision_positive": 0.0,
+      "recall_positive": 0.0,
+      "roc_auc": 0.6181636980588006,
+      "pr_auc": 0.10762522917965595
+    },
+    "training_protocol": "Selected saved model, fitted on inner training only; no test-driven refit or selection.",
+    "test_positive_prevalence": 0.0653282516506522
+  },
+  "full_conversation_sha256": "c2fa98bb7c5cf9f10df0ea7999f19f5daf36b348428119e27c083443e443e0cf",
+  "context": "Research pilot on one retrospective dataset. Public messages are original; unsupported LLM interpretations are not endorsed."
+}

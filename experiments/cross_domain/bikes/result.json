@@ -1,0 +1,66 @@
+{
+  "domain": "bikes",
+  "approved_models": [
+    "random_forest_regressor",
+    "lightgbm_regressor",
+    "xgboost_regressor"
+  ],
+  "trials": 5,
+  "selected": {
+    "trial": 5,
+    "model": "lightgbm_regressor",
+    "augmentation": "none",
+    "r2": 0.9083807468,
+    "rmse": 65.6870874452,
+    "mae": 47.1405029297,
+    "reference_r2": -0.2898034099,
+    "reference_rmse": 246.461096323,
+    "reference_mae": 188.5417894164,
+    "completed_folds": 1,
+    "expected_folds": 1
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 5,
+      "model": "lightgbm_regressor",
+      "augmentation": "none",
+      "r2": 0.9083807468,
+      "rmse": 65.6870874452,
+      "mae": 47.1405029297,
+      "reference_r2": -0.2898034099,
+      "reference_rmse": 246.461096323,
+      "reference_mae": 188.5417894164,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    "test_rows": 3476,
+    "scores": {
+      "r2": 0.9039832040746917,
+      "rmse": 68.32069780164582,
+      "mae": 46.78096731617224
+    },
+    "training_protocol": "Selected saved model, fitted on inner training only; no test-driven refit or selection.",
+    "test_positive_prevalence": null,
+    "diagnostic_metrics": [
+      {
+        "name": "custom_commuter_hour_rmse",
+        "kind": "rmse",
+        "rows": 687,
+        "value": 107.09805359927209
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "name": "custom_commuter_hour_rmse",
+      "kind": "rmse",
+      "where": [
+        {
+          "column": "is_commuter_focus",
+          "op": "eq",
+          "value": 1
+        }
+      ]
+    }
+  ]
+}

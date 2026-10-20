@@ -1,0 +1,31 @@
+{
+  "energy": {
+    "uci_id": 374,
+    "path": "energy.csv",
+    "sha256": "2820bf712ad0275cb18b85a05250926100d8e65ebb9f4d2d016ca91ea152a25d",
+    "shape": [
+      19735,
+      29
+    ]
+  },
+  "bikes": {
+    "uci_id": 275,
+    "path": "bikes.csv",
+    "sha256": "e03de4ee4ef4dc376ac6e04bf829673c6269e8eba5c60fa121640fa2f829504f",
+    "shape": [
+      17379,
+      17
+    ],
+    "cross_check": "All 17379 target counts match the pinned scikit-learn example mirror in row order."
+  },
+  "activity": {
+    "uci_id": 240,
+    "path": "activity.csv",
+    "sha256": "a08aa4852ac3265a04a290799b4e05461766378578397f95185f677318882c74",
+    "shape": [
+      10299,
+      563
+    ],
+    "conversion": "Concatenated original train/test matrices, mapped activity IDs to supplied labels, retained subject IDs; appended feature index to disambiguate repeated names. Native experiment uses its own reproducible subject-group partitions."
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "review_date": "2026-10-20",
+  "scope": "All four observable agent conversations, native arguments/results, trial configurations and structured notes. Private model thinking is excluded.",
+  "mechanical_checks": [
+    {
+      "domain": "energy",
+      "completed_trials": 4,
+      "native_calls_answered": 12,
+      "single_model_approval": true,
+      "operator_interventions": 0,
+      "next_trial_bindings": [
+        {
+          "reviewed_trial": 1,
+          "executed_trial": 2,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 2,
+          "executed_trial": 3,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 3,
+          "executed_trial": 4,
+          "arguments_match_execution": true
+        }
+      ],
+      "prepared_but_unselected_features": [
+        {
+          "trial": 4,
+          "names": [
+            "T1xRH1",
+            "T2xRH2",
+            "T3xRH3",
+            "T4xRH4",
+            "T5xRH5",
+            "T7xRH7",
+            "T8xRH8",
+            "T9xRH9"
+          ]
+        }
+      ],
+      "tool_errors": [
+        {
+          "message": 10,
+          "error": "ValueError: Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+        }
+      ],
+      "ineffective_trial": {
+        "trial": 4,
+        "same_model_configuration_as_trial": 3,
+        "selected_feature_count": 21,
+        "predictions_repeated_within_tolerance": 1e-10,
+        "fold_checks": [
+          {
+            "model": "linear_regressor",
+            "fold": 1,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "random_forest_regressor",
+            "fold": 1,
+            "maximum_prediction_difference": 5.684341886080802e-14
+          },
+          {
+            "model": "lightgbm_regressor",
+            "fold": 1,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "xgboost_regressor",
+            "fold": 1,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "constant_regressor",
+            "fold": 1,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "linear_regressor",
+            "fold": 2,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "random_forest_regressor",
+            "fold": 2,
+            "maximum_prediction_difference": 5.684341886080802e-14
+          },
+          {
+            "model": "lightgbm_regressor",
+            "fold": 2,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "xgboost_regressor",
+            "fold": 2,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "constant_regressor",
+            "fold": 2,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "linear_regressor",
+            "fold": 3,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "random_forest_regressor",
+            "fold": 3,
+            "maximum_prediction_difference": 5.684341886080802e-14
+          },
+          {
+            "model": "lightgbm_regressor",
+            "fold": 3,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "xgboost_regressor",
+            "fold": 3,
+            "maximum_prediction_difference": 0.0
+          },
+          {
+            "model": "constant_regressor",
+            "fold": 3,
+            "maximum_prediction_difference": 0.0
+          }
+        ],
+        "interpretation": "The tool arguments created eight product columns but did not select them as model inputs. This did not test the stated interaction hypothesis."
+      }
+    },
+    {
+      "domain": "bikes",
+      "completed_trials": 5,
+      "native_calls_answered": 11,
+      "single_model_approval": true,
+      "operator_interventions": 0,
+      "next_trial_bindings": [
+        {
+          "reviewed_trial": 1,
+          "executed_trial": 2,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 2,
+          "executed_trial": 3,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 3,
+          "executed_trial": 4,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 4,
+          "executed_trial": 5,
+          "arguments_match_execution": true
+        }
+      ],
+      "prepared_but_unselected_features": [],
+      "tool_errors": [
+        {
+          "message": 10,
+          "error": "ValueError: Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+        }
+      ]
+    },
+    {
+      "domain": "activity",
+      "completed_trials": 5,
+      "native_calls_answered": 13,
+      "single_model_approval": true,
+      "operator_interventions": 0,
+      "next_trial_bindings": [
+        {
+          "reviewed_trial": 1,
+          "executed_trial": 2,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 2,
+          "executed_trial": 3,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 3,
+          "executed_trial": 4,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 4,
+          "executed_trial": 5,
+          "arguments_match_execution": true
+        }
+      ],
+      "prepared_but_unselected_features": [],
+      "tool_errors": [
+        {
+          "message": 12,
+          "error": "ValueError: Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+        },
+        {
+          "message": 13,
+          "error": "ValueError: Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+        }
+      ]
+    },
+    {
+      "domain": "finance",
+      "completed_trials": 5,
+      "native_calls_answered": 10,
+      "single_model_approval": true,
+      "operator_interventions": 0,
+      "next_trial_bindings": [
+        {
+          "reviewed_trial": 1,
+          "executed_trial": 2,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 2,
+          "executed_trial": 3,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 3,
+          "executed_trial": 4,
+          "arguments_match_execution": true
+        },
+        {
+          "reviewed_trial": 4,
+          "executed_trial": 5,
+          "arguments_match_execution": true
+        }
+      ],
+      "prepared_but_unselected_features": [],
+      "tool_errors": []
+    }
+  ],
+  "interpretation": "Argument-to-execution agreement is not semantic agreement with the stated experiment. See explanation_review.md for qualitative findings.",
+  "source_note": "These conversations used their recorded frozen sources. Automatic custom_ prefix normalization was applied after all four searches completed."
+}

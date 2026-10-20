@@ -1,0 +1,263 @@
+{
+  "original_workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_domains_20261018/live_v1/activity/memory/9da2bf74abe14269bc2f415526d67dd8",
+  "original_agent": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_domains_20261018/live_v1/activity/memory/9da2bf74abe14269bc2f415526d67dd8/agents/31d53129f5494789a81db67e1aa10133",
+  "observable_conversation": "messages.json",
+  "proposal_and_script_requests": "discovery.json",
+  "native_requests_and_tool_execution": "events.jsonl",
+  "private_thinking": "Not exported; token usage includes private reasoning.",
+  "preparation_check_note": "Temporal mutation is not applicable to grouped activity recognition; its false flag means not run. Subject disjointness is audited independently.",
+  "llm_responses": [
+    {
+      "stage": "proposal",
+      "elapsed_seconds": 255.61442017700756,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 5216,
+        "prompt_tokens": 27724,
+        "total_tokens": 32940,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "stop"
+    },
+    {
+      "stage": "script_generation",
+      "elapsed_seconds": 408.1622916870401,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 689,
+        "prompt_tokens": 53784,
+        "total_tokens": 54473,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "stop"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 7.565794616995845,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 109,
+        "prompt_tokens": 12125,
+        "total_tokens": 12234,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 33.58139119698899,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 529,
+        "prompt_tokens": 33040,
+        "total_tokens": 33569,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 13.712618989986368,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 117,
+        "prompt_tokens": 34065,
+        "total_tokens": 34182,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 19.26612607599236,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 209,
+        "prompt_tokens": 37937,
+        "total_tokens": 38146,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 135.91054603102384,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 2317,
+        "prompt_tokens": 48092,
+        "total_tokens": 50409,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 24.46474176697666,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 213,
+        "prompt_tokens": 48430,
+        "total_tokens": 48643,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 160.12116874899948,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 2018,
+        "prompt_tokens": 27961,
+        "total_tokens": 29979,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 442.31445008399896,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 9193,
+        "prompt_tokens": 33571,
+        "total_tokens": 42764,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 142.57183055597125,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 2851,
+        "prompt_tokens": 42966,
+        "total_tokens": 45817,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 84.50857402500696,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1500,
+        "prompt_tokens": 48385,
+        "total_tokens": 49885,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 64.8686895610299,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1051,
+        "prompt_tokens": 53421,
+        "total_tokens": 54472,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "failures": [
+    {
+      "schema_version": 1,
+      "event_id": "a4e1aba2b5274ddda4d47f0ab5a572e5",
+      "timestamp": "2026-10-18T00:00:22.660338+00:00",
+      "event": "llm.error",
+      "operation": "script_generation",
+      "operation_id": "72c14bec67f645f49fc04a61357f83f8",
+      "parent_id": null,
+      "run_id": null,
+      "data": {
+        "elapsed_seconds": 784.7093451269902,
+        "error_type": "ValueError",
+        "error": "Local reasoning exhausted its token budget before producing an answer"
+      }
+    },
+    {
+      "schema_version": 1,
+      "event_id": "b7d82c08a20b404f96cc70b7ce6103df",
+      "timestamp": "2026-10-18T07:55:35.615996+00:00",
+      "event": "execution.error",
+      "operation": "agent.tool",
+      "operation_id": "e96dea09199a43879136b8849005a3c2",
+      "parent_id": null,
+      "run_id": null,
+      "data": {
+        "elapsed_seconds": 0.018731357995420694,
+        "error_type": "ValueError",
+        "error": "Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+      }
+    },
+    {
+      "schema_version": 1,
+      "event_id": "e86228a7d8a547bf91538264cc3260a3",
+      "timestamp": "2026-10-18T07:55:35.681354+00:00",
+      "event": "execution.error",
+      "operation": "agent.tool",
+      "operation_id": "0e195bb130724c84b7f16d79df248555",
+      "parent_id": null,
+      "run_id": null,
+      "data": {
+        "elapsed_seconds": 0.01623570895753801,
+        "error_type": "ValueError",
+        "error": "Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+      }
+    },
+    {
+      "schema_version": 1,
+      "event_id": "153eae9e15e441588db32d067059beae",
+      "timestamp": "2026-10-18T07:56:10.437680+00:00",
+      "event": "llm.error",
+      "operation": "agent",
+      "operation_id": "31f5b60bdd904925b6a550fb3a69b283",
+      "parent_id": null,
+      "run_id": null,
+      "data": {
+        "error": "CUDA out of memory. Tried to allocate 1.46 GiB. GPU 0 has a total capacity of 79.18 GiB of which 360.94 MiB is free. Including non-PyTorch memory, this process has 78.82 GiB memory in use. Of the allocated memory 73.61 GiB is allocated by PyTorch, and 4.54 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)",
+        "elapsed_seconds": 9.86678168096114
+      }
+    }
+  ],
+  "context_source": "context_source_update.json",
+  "trial_source": "activity_source_update.json",
+  "runtime_source": "runtime_update.json",
+  "sha256": {
+    "notes.json": "4af08fe666d81759601eddae7a3aa3b036e77e0731a9fedfc2aa6de2938be424",
+    "trial_results.csv": "7baf3d099938b9dd122c85f313d89a472a9443bbbf5e0fd91d441bf1eecffd77",
+    "proposal.json": "ff14ff4dc756b8c01f54640eb46191640a2ca475633fa2c8a848da10aad412cc",
+    "messages.json": "0f3891d130fb2966d21e9bd9a1a9c4eafbf6d3203fc11bbd5bfffa49c7dd032e",
+    "reviewed_config.json": "66d37f20732827c8605130627180f1ed7719621bdab0e1c356db9a5384dc25f6",
+    "result.json": "85c8f9efacbdc78bed18a883a325c811b36ca827ba85ae2e669394cd2601cf7e",
+    "validation.png": "9207df34dc4048ac2936936d1bcfcb01669dbea71c1b3e45c482e955a94906f8",
+    "review.json": "05fc64fb33ba03f674ed902463fe2188325eca3b51e5eeb974f563ebf9bf07e7",
+    "independent_checks.json": "48b6666bb67879a8ad452cf3ea1ec78d23400d9643587dce483a6bc2b3d9ac60",
+    "preparation.py": "730fe696673501d7f95d9c42cc7d6b6a78af1e2c2e8b9a32f686fb5fb9cbadc5",
+    "trials.json": "fe114717adc552b197951e3d9bd197d816924f6ae08e029007038a8530de34e3",
+    "events.jsonl": "3984a12973937353f7db91e01e651e41280fdc51a8e49688b3ff9f38d2a58efe",
+    "evaluation.json": "2463f005e7b4f9fc9a03f4798d27e4fa76894cfa4db4527877d0d3e08310d78e",
+    "conversation.md": "db98f50b782a4d737e56d608f8ee3e47427d2827a886ffca4a8cdc8a7d4644c2",
+    "discovery.json": "0706780bd12b5d8e9b05a2839ad6ac09526db6b24020166135c8af1b7486dcf8",
+    "partitions.json": "f66b5c1bbdb121f1e3b68d8db5d355e4b5f35bcce2cd1a05ac231ddf4bc58b2d",
+    "preparation_checks.json": "a4849ff6d0b6a349c62eeb5b7448b2ece187cc90017484032ec332ceae507cc8"
+  }
+}

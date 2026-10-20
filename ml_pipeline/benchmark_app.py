@@ -198,6 +198,12 @@ def _augmentation_registry():
 st.set_page_config(page_title="ML Benchmark UI", layout="wide")
 st.title("ML Benchmark UI")
 
+workflow = st.radio("Workflow", ["Assistant playground", "Manual benchmark"], horizontal=True)
+if workflow == "Assistant playground":
+    from ml_pipeline.playground_app import render_playground
+    render_playground()
+    st.stop()
+
 with st.sidebar:
     st.header("Dataset")
     source = st.radio("Source", ["Upload CSV", "Path"], horizontal=True)

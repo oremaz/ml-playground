@@ -1,0 +1,206 @@
+{
+  "original_workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_domains_20261018/live_v1/energy/memory/077811d5d2dc4248a9a217925768f31f",
+  "original_agent": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_domains_20261018/live_v1/energy/memory/077811d5d2dc4248a9a217925768f31f/agents/162f0179f64c4d2e915ff17108294232",
+  "observable_conversation": "messages.json",
+  "proposal_and_script_requests": "discovery.json",
+  "native_requests_and_tool_execution": "events.jsonl",
+  "private_thinking": "Not exported; token usage includes private reasoning.",
+  "preparation_check_note": "Temporal mutation checks passed.",
+  "llm_responses": [
+    {
+      "stage": "proposal",
+      "elapsed_seconds": 503.8642120749573,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 10773,
+        "prompt_tokens": 9280,
+        "total_tokens": 20053,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "stop"
+    },
+    {
+      "stage": "script_generation",
+      "elapsed_seconds": 566.2489130420145,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 12365,
+        "prompt_tokens": 10397,
+        "total_tokens": 22762,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "stop"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 4.780470807978418,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 86,
+        "prompt_tokens": 3788,
+        "total_tokens": 3874,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 11.033854554989375,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 204,
+        "prompt_tokens": 9001,
+        "total_tokens": 9205,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 7.448478773003444,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 117,
+        "prompt_tokens": 10047,
+        "total_tokens": 10164,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 35.22766519902507,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 717,
+        "prompt_tokens": 12820,
+        "total_tokens": 13537,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 19.305325113993604,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 349,
+        "prompt_tokens": 16072,
+        "total_tokens": 16421,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 71.6879764579935,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1508,
+        "prompt_tokens": 18514,
+        "total_tokens": 20022,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 65.97693465801422,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1342,
+        "prompt_tokens": 24681,
+        "total_tokens": 26023,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 58.44987036997918,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1131,
+        "prompt_tokens": 29772,
+        "total_tokens": 30903,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 63.519064867985435,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 1203,
+        "prompt_tokens": 34746,
+        "total_tokens": 35949,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    },
+    {
+      "stage": "agent",
+      "elapsed_seconds": 33.43963625701144,
+      "model": "Qwen/Qwen3.8-27B",
+      "usage": {
+        "completion_tokens": 522,
+        "prompt_tokens": 39479,
+        "total_tokens": 40001,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "failures": [
+    {
+      "schema_version": 1,
+      "event_id": "0ecfdd8ff219479db216e8e8184ef46c",
+      "timestamp": "2026-10-17T23:03:09.870576+00:00",
+      "event": "execution.error",
+      "operation": "agent.tool",
+      "operation_id": "267d29a8a0bc4df5ba3fe3af9bb41b3a",
+      "parent_id": null,
+      "run_id": null,
+      "data": {
+        "elapsed_seconds": 0.0038289029616862535,
+        "error_type": "ValueError",
+        "error": "Use a descriptive custom_ metric name with lowercase letters, digits and underscores"
+      }
+    }
+  ],
+  "context_source": null,
+  "trial_source": "provenance.json",
+  "runtime_source": "provenance.json",
+  "sha256": {
+    "notes.json": "dfc06efa01ed13dd350324d142697b51ce835b0ff39ffd70513c648baa428897",
+    "trial_results.csv": "774ebc22f5770b6f24478222ad56398f4013c063ba177d30df2a1a30341ec9fa",
+    "proposal.json": "c16242b42893fe8b673c04f1b403cd43ef7565b9f1c533c4f82a516bbb386a28",
+    "messages.json": "ea4ceb8ee69bba340bcd55d360b39751f5600d691fcbfe26e7622fcf8ef0a1dc",
+    "reviewed_config.json": "1a20629c2b3937cb0f747c08f9472e354d0c600a1c6efc3affb79937fc8611d9",
+    "result.json": "9f201099c0c862234c34beffaa6925304b9594cc749e77adb171cfa8d0186260",
+    "validation.png": "2c747f6a7df992720b7b3718f0af1001dab0e58fc8cb875d88e67075aed97df1",
+    "review.json": "05fc64fb33ba03f674ed902463fe2188325eca3b51e5eeb974f563ebf9bf07e7",
+    "independent_checks.json": "e4557fc93b701fc76ec1323689da4c85bc9ae0f041efaf83d35d59d1df042ff2",
+    "preparation.py": "d18d0d570f438281e1db2807de3b6293e3940dee78a85e08cce1e444c96c06d4",
+    "trials.json": "4a7d18dde1a74858e178f75d5b574173f25ecf486cbc3444841d2fd89a521e41",
+    "events.jsonl": "2a0349d3bf0d68e53d60aaa15b484b39e8a03a8320e674b6980d7edc03711b31",
+    "evaluation.json": "1a870d80d8e9cd809d49e95392da4f0143b7b90c758eb2482926afac38831967",
+    "conversation.md": "b28dcdc03814715b7b3f2b78c303556550888db5b90a5e04c04e8a08e4d21129",
+    "discovery.json": "6ecdecde393d55c3f69476c0379a29944f8b1d7f5c28a89ee7aa6e4b1e1e07de",
+    "partitions.json": "3e900cb67cc53850a8bdc8f46953498ac806ec00de5083c85a06e49a8f7e5317",
+    "preparation_checks.json": "d3d706c66003066e267a3587851edc987865056f10c375414a1979c1019dc4bc"
+  }
+}

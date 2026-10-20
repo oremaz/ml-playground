@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-10-20T06:29:59.548541+00:00",
+  "cases": [
+    {
+      "domain": "energy",
+      "workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/energy/memory/45366ecf4d3d4e9ebd7dd94862f85a7f",
+      "source_hashes_match": true,
+      "operator_source_updates": 0,
+      "new_workspace": true
+    },
+    {
+      "domain": "bikes",
+      "workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/bikes/memory/37d75c8462464d4caf0633eb58dace4a",
+      "source_hashes_match": true,
+      "operator_source_updates": 0,
+      "new_workspace": true
+    },
+    {
+      "domain": "activity",
+      "workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/activity/memory/9d96af14c1de4200962421ef5ded946f",
+      "source_hashes_match": true,
+      "operator_source_updates": 0,
+      "new_workspace": true
+    },
+    {
+      "domain": "finance",
+      "workspace": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/finance/memory/cb36c939742c49b7b7bfd42af2b5025f",
+      "source_hashes_match": true,
+      "operator_source_updates": 0,
+      "new_workspace": true
+    }
+  ]
+}

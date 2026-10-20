@@ -1,0 +1,184 @@
+{
+  "source_run": "results/agent_forecasting_20261017/validation/forecast_agent",
+  "date": "2026-10-18",
+  "model": "Qwen/Qwen3.8-27B",
+  "reasoning": "xhigh",
+  "trials": [
+    {
+      "trial": 1,
+      "model": "naive_forecaster",
+      "augmentation": "none",
+      "mae": 54.6947428385,
+      "rmse": 69.8335616243,
+      "smape": 1.3669591922,
+      "pinball_loss": null,
+      "coverage_80": null,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 1,
+      "model": "seasonal_naive_forecaster",
+      "augmentation": "none",
+      "mae": 61.6300292969,
+      "rmse": 75.6859024403,
+      "smape": 1.5389383908,
+      "pinball_loss": null,
+      "coverage_80": null,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 1,
+      "model": "timestral_209m",
+      "augmentation": "none",
+      "mae": 53.5868326823,
+      "rmse": 69.081367764,
+      "smape": 1.3394600538,
+      "pinball_loss": 17.5522298177,
+      "coverage_80": 1.0,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 1,
+      "model": "toto_2_0_313m",
+      "augmentation": "none",
+      "mae": 54.5713378906,
+      "rmse": 70.953532764,
+      "smape": 1.3650492379,
+      "pinball_loss": 17.880859375,
+      "coverage_80": 1.0,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 1,
+      "model": "timesfm_3_0",
+      "augmentation": "none",
+      "mae": 64.2286295573,
+      "rmse": 85.3304041654,
+      "smape": 1.600550094,
+      "pinball_loss": 21.4531559245,
+      "coverage_80": 1.0,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    {
+      "trial": 1,
+      "model": "chronos_2",
+      "augmentation": "none",
+      "mae": 46.6092122396,
+      "rmse": 55.8743046781,
+      "smape": 1.1659531668,
+      "pinball_loss": 16.9023470052,
+      "coverage_80": 1.0,
+      "completed_folds": 1,
+      "expected_folds": 1
+    }
+  ],
+  "notes": [
+    {
+      "trial": 1,
+      "measured": [
+        {
+          "id": "t1.naive_forecaster.none.mae",
+          "trial": 1,
+          "value": 54.6947428385,
+          "description": "naive_forecaster/none: validation mae = 54.6947"
+        },
+        {
+          "id": "t1.seasonal_naive_forecaster.none.mae",
+          "trial": 1,
+          "value": 61.6300292969,
+          "description": "seasonal_naive_forecaster/none: validation mae = 61.63"
+        },
+        {
+          "id": "t1.timestral_209m.none.mae",
+          "trial": 1,
+          "value": 53.5868326823,
+          "description": "timestral_209m/none: validation mae = 53.5868"
+        },
+        {
+          "id": "t1.toto_2_0_313m.none.mae",
+          "trial": 1,
+          "value": 54.5713378906,
+          "description": "toto_2_0_313m/none: validation mae = 54.5713"
+        },
+        {
+          "id": "t1.timesfm_3_0.none.mae",
+          "trial": 1,
+          "value": 64.2286295573,
+          "description": "timesfm_3_0/none: validation mae = 64.2286"
+        },
+        {
+          "id": "t1.chronos_2.none.mae",
+          "trial": 1,
+          "value": 46.6092122396,
+          "description": "chronos_2/none: validation mae = 46.6092"
+        },
+        {
+          "id": "t1.status",
+          "trial": 1,
+          "value": "completed",
+          "description": "Trial 1 status: completed"
+        },
+        {
+          "id": "t1.chronos_2.none.rmse",
+          "trial": 1,
+          "value": 55.8743046781,
+          "description": "chronos_2/none: validation rmse = 55.8743"
+        },
+        {
+          "id": "t1.metric_definition",
+          "trial": 1,
+          "value": "mae",
+          "description": "Selection uses validation mae."
+        }
+      ],
+      "hypothesis": "chronos_2's lower validation MAE (46.61 vs 54.69 for naive) comes mainly from smaller errors at horizon steps 3-5, where all models' MAE rises with horizon; its step-5 MAE (75.3) is well below naive (94.7) and timesfm (117.1).",
+      "alternative": "With only 3 backtest windows (15 evaluated observations), the model ranking may be within noise; no model is reliably better, and pretraining overlap with this series is unknown.",
+      "next_test": "None affordable: the single-trial budget is spent. A follow-up would need more backtest windows or additional series to separate model skill from window noise.",
+      "distinguishes": "More windows would distinguish whether chronos_2's horizon-3-5 advantage persists or is an artifact of the three shared origins; the current single split cannot establish significance.",
+      "decision": "stop",
+      "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+    }
+  ],
+  "selected": {
+    "trial": 1,
+    "model": "chronos_2",
+    "augmentation": "none",
+    "mae": 46.6092122396,
+    "rmse": 55.8743046781,
+    "smape": 1.1659531668,
+    "pinball_loss": 16.9023470052,
+    "coverage_80": 1.0,
+    "completed_folds": 1,
+    "expected_folds": 1
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 1,
+      "model": "chronos_2",
+      "augmentation": "none",
+      "mae": 46.6092122396,
+      "rmse": 55.8743046781,
+      "smape": 1.1659531668,
+      "pinball_loss": 16.9023470052,
+      "coverage_80": 1.0,
+      "completed_folds": 1,
+      "expected_folds": 1
+    },
+    "test_rows": 504,
+    "scores": {
+      "mae": 28.240169270833334,
+      "rmse": 33.5900452356809,
+      "smape": 0.4682295286624022
+    },
+    "evaluated_observations": 15,
+    "forecast_windows": 3,
+    "training_protocol": "Locked zero-shot checkpoint; rolling observed history, no final-driven fitting or selection."
+  },
+  "full_conversation_sha256": "9f2a3a3cc8b2bc458713e275eb019ccf0ff1fda0667c781299859e370543e683",
+  "context": "Research pilot on one retrospective dataset. Public messages are original; unsupported LLM interpretations are not endorsed."
+}

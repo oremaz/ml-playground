@@ -1,0 +1,77 @@
+{
+  "insights": [
+    "Observed: energy.csv has 19,735 rows, 29 columns, no missing values, and date is unique, consistent with one 10-minute interval per row; no joins are needed.",
+    "Observed: Appliances is continuous and right-skewed (median 60 Wh, mean 97.7 Wh, max 1080 Wh), so raw-Wh RMSE will be sensitive to high-load intervals.",
+    "Observed: lights has median 0 and max 70 Wh; it is excluded as an unavailable input, but if Appliances includes lights, evening underprediction may be harder without a lights feature.",
+    "Observed: rv1 and rv2 have identical summary statistics and full row uniqueness; with the author metadata, they are treated as random controls and excluded.",
+    "Observed: airport weather columns are excluded per the unavailable-input constraint; T1-T9 and RH_1-RH_9 are retained, including T6/RH_6, which show wider ranges and may represent less controlled or boundary conditions.",
+    "Hypothesis: same-interval room/building temperature and humidity sensors plus calendar features can explain part of the load pattern, but results are single-house and should not be transferred to new buildings.",
+    "Temporal leakage is avoided by using only same-interval sensors and calendar features, with a chronological holdout on date; no lags or forward-looking features are proposed.",
+    "Overall RMSE can mask systematic evening underestimation, so post-hoc diagnostics should report mean signed error and RMSE for hour 17-22 separately."
+  ],
+  "questions": [
+    "Should the target be Appliances (the metered appliance/total load) or a derived Appliances - lights (non-light load), given that lights is excluded as an input?",
+    "For the evening window, should hour 22 be included as 17:00-22:59, and should evening RMSE/bias be reported separately rather than used as the optimization metric?"
+  ],
+  "preparation": "Single table, no joins, so no join cardinality validation is needed. Parse date as datetime. Derive calendar features: hour, minute, dayofweek, is_weekend, month, day, and is_evening (1 if 17 <= hour <= 22). No derived target is used; target is the original Appliances column. Exclude date, Appliances, lights, T_out, Press_mm_hg, RH_out, Windspeed, Visibility, Tdewpoint, rv1, and rv2. Use explicit features: T1, RH_1, T2, RH_2, T3, RH_3, T4, RH_4, T5, RH_5, T6, RH_6, T7, RH_7, T8, RH_8, T9, RH_9, hour, minute, dayofweek, is_weekend, month, day, is_evening. No lags or future information are used.",
+  "task": "regression",
+  "table": "energy.csv",
+  "target": "Appliances",
+  "features": [
+    "T1",
+    "RH_1",
+    "T2",
+    "RH_2",
+    "T3",
+    "RH_3",
+    "T4",
+    "RH_4",
+    "T5",
+    "RH_5",
+    "T6",
+    "RH_6",
+    "T7",
+    "RH_7",
+    "T8",
+    "RH_8",
+    "T9",
+    "RH_9",
+    "hour",
+    "minute",
+    "dayofweek",
+    "is_weekend",
+    "month",
+    "day",
+    "is_evening"
+  ],
+  "models": [
+    "random_forest_regressor",
+    "lightgbm_regressor",
+    "xgboost_regressor"
+  ],
+  "augmentations": [
+    "none"
+  ],
+  "preprocessing": "standard",
+  "split": "temporal",
+  "split_column": "date",
+  "metric": "rmse",
+  "rationale": "The objective is to estimate continuous Wh per interval, so regression with a chronological holdout matches the requirement to hold out future intervals. Only CPU tree ensembles are allowed, so Random Forest, LightGBM, and XGBoost are proposed within the 5-trial budget; Random Forest is a robust baseline, while LightGBM and XGBoost are strong fast tabular models. Standard preprocessing is used initially, and RMSE is the primary metric because the user asked for overall RMSE. Evening underestimation should be checked with separate hour 17-22 bias/RMSE diagnostics rather than causal claims. Metrics are validation estimates, not independent test performance.",
+  "seed": 42,
+  "validation_fraction": 0.2,
+  "device": "cpu",
+  "model_params": {
+    "random_forest_regressor": {
+      "n_estimators": 100,
+      "n_jobs": 4
+    },
+    "lightgbm_regressor": {
+      "n_estimators": 100,
+      "n_jobs": 4
+    },
+    "xgboost_regressor": {
+      "n_estimators": 100,
+      "n_jobs": 4
+    }
+  }
+}

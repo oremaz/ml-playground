@@ -1,0 +1,11 @@
+{
+  "domain": "activity",
+  "all_checked": true,
+  "checks": [
+    "saved preparation reproduced",
+    "original rows/targets preserved; model inputs independent of target values",
+    "participant IDs retained only for grouping"
+  ],
+  "rows": 10299,
+  "features": 561
+}

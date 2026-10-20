@@ -338,9 +338,9 @@ class SimplePredictor(Evaluate):
         """Prepare data for PyTorch models, return None for sklearn models."""
         if hasattr(self, 'device') and hasattr(self.model, 'eval'):
             # PyTorch model - create DataLoader
-            X_tensor = torch.tensor(X, dtype=torch.float32)
+            X_tensor = torch.as_tensor(X, dtype=torch.float32)
             if y is not None:
-                y_tensor = torch.tensor(y, dtype=torch.float32 if self.task_type == "regression" else torch.long)
+                y_tensor = torch.as_tensor(y, dtype=torch.float32 if self.task_type == "regression" else torch.long)
                 dataset = TensorDataset(X_tensor, y_tensor)
             else:
                 dataset = TensorDataset(X_tensor)
@@ -413,11 +413,31 @@ class GeneralPipelineSklearn(Evaluate):
             kfold = KFold(n_splits=self.k_folds, shuffle=True, random_state=self.random_state)
             cv_iterator = kfold.split(X)
         
-        fold_scores = []
-        
+        from pathlib import Path
+        from ml_pipeline.utils.training_checkpoint import (
+            CheckpointPause, atomic_save, data_fingerprint, load_checkpoint, restore_rng, rng_state,
+        )
+        restart_path = getattr(self, "restart_path", None)
+        restart_file = Path(restart_path) / "restart.pt" if restart_path else None
+        context = {"run": getattr(self, "restart_context", None), "k_folds": self.k_folds,
+                   "seed": self.random_state, "data_fingerprint": data_fingerprint(X, y)}
+        restart = load_checkpoint(restart_file, context) if restart_file else None
+        fold_scores, next_fold, completed = [], 0, False
+        if restart is not None:
+            self.model, fold_scores = restart["model"], restart["fold_scores"]
+            next_fold, completed = restart["next_fold"], restart["completed"]
+            restore_rng(restart["rng"])
+
+        def save(fold, completed=False):
+            if restart_file is not None:
+                atomic_save({"config": context, "model": self.model, "fold_scores": fold_scores,
+                             "next_fold": fold, "completed": completed, "rng": rng_state()}, restart_file)
+        save(next_fold, completed)
         logger.info("Starting %d-fold cross-validation for sklearn model...", self.k_folds)
 
         for fold, (train_idx, val_idx) in enumerate(cv_iterator):
+            if fold < next_fold:
+                continue
             logger.info("Training fold %d/%d", fold + 1, self.k_folds)
             
             # Split data for this fold
@@ -464,7 +484,9 @@ class GeneralPipelineSklearn(Evaluate):
                     fold_metrics[metric_key] = 0.0
             
             fold_scores.append(fold_metrics)
-            
+            save(fold + 1)
+            if self._stop_request.requested:
+                raise CheckpointPause("Completed classical validation folds saved")
             # Print fold results
             primary_metric = "f1_score" if self.task_type == "classification" else "r2_score"
             metric_value = fold_metrics.get(primary_metric)
@@ -477,7 +499,11 @@ class GeneralPipelineSklearn(Evaluate):
 
         # Train final model on full dataset
         logger.info("Training final model on full dataset...")
-        self.internal_fit(X, y, None, None, self.model)
+        if not completed:
+            self.internal_fit(X, y, None, None, self.model)
+            save(self.k_folds, completed=True)
+            if self._stop_request.requested:
+                raise CheckpointPause("Completed classical full-data fit saved")
 
         logger.info("Final model trained successfully on full dataset!")
         
@@ -555,6 +581,11 @@ class GeneralPipelineSklearn(Evaluate):
         return self._evaluate(X, y)
 
     def fit(self, X, y):
+        from ml_pipeline.utils.training_checkpoint import StopRequest
+        with StopRequest() as self._stop_request:
+            return self._fit_restart(X, y)
+
+    def _fit_restart(self, X, y):
         """
         Train the scikit-learn model with optional k-fold cross-validation.
         
@@ -994,9 +1025,9 @@ class GeneralPipeline(Evaluate):
     
     def prepare_data_internal(self, X: np.ndarray, y: Optional[np.ndarray] = None, train: bool = True) -> DataLoader:
         """Internal data preparation without augmentations (assumes already applied)."""
-        X_tensor = torch.tensor(X, dtype=torch.float32)
+        X_tensor = torch.as_tensor(X, dtype=torch.float32)
         if y is not None:
-            y_tensor = torch.tensor(y, dtype=torch.float32 if self.task_type == "regression" else torch.long)
+            y_tensor = torch.as_tensor(y, dtype=torch.float32 if self.task_type == "regression" else torch.long)
             dataset = TensorDataset(X_tensor, y_tensor)
         else:
             dataset = TensorDataset(X_tensor)
@@ -1047,6 +1078,7 @@ class GeneralPipeline(Evaluate):
                 'epochs': self.epochs,
                 'batch_size': self.batch_size,
                 'learning_rate': self.optimizer.param_groups[0]['lr'] if hasattr(self, 'optimizer') else 1e-4,
+                **({'output_dir': self.restart_path} if getattr(self, 'restart_path', None) else {}),
             }
             
             # Call the model's fit method
@@ -1089,6 +1121,11 @@ class GeneralPipeline(Evaluate):
             return self._single_fit_internal(X_train, y_train, X_val, y_val)
 
     def _single_fit_internal(self, X_train: np.ndarray, y_train: np.ndarray, X_val: Optional[np.ndarray] = None, y_val: Optional[np.ndarray] = None):
+        from ml_pipeline.utils.training_checkpoint import StopRequest
+        with StopRequest() as self._stop_request:
+            return self._single_fit_restart(X_train, y_train, X_val, y_val)
+
+    def _single_fit_restart(self, X_train, y_train, X_val=None, y_val=None):
         """Internal single training run (original fit logic) - assumes augmentations already applied."""
         # Compute class weights from training data (after augmentation)
         self.class_weights = self._compute_class_weights(y_train)
@@ -1105,10 +1142,64 @@ class GeneralPipeline(Evaluate):
         best_metric_value = None  # Track best metric for live weight selection
         best_val_loss = float('inf')  # For validation loss early stopping
         
-        for epoch in range(self.epochs):
+        from pathlib import Path
+        from ml_pipeline.utils.training_checkpoint import (
+            CheckpointClock, CheckpointPause, atomic_save, data_fingerprint,
+            load_checkpoint, restore_rng, rng_state,
+        )
+        restart_path = getattr(self, "restart_path", None)
+        restart_file = Path(restart_path) / "restart.pt" if restart_path else None
+        context = {"run": getattr(self, "restart_context", None), "epochs": self.epochs,
+                   "batch_size": self.batch_size, "seed": self.random_state,
+                   "shape": X_train.shape, "labels": y_train.tolist(),
+                   "validation_labels": y_val.tolist() if y_val is not None else None,
+                   "data_fingerprint": data_fingerprint(X_train, y_train, X_val, y_val)}
+        restart = load_checkpoint(restart_file, context) if restart_file else None
+        epoch_start, batch_start, train_loss = 0, 0, 0.0
+        epoch_loader_rng = train_loader.generator.get_state()
+        if restart is not None:
+            self.model.load_state_dict(restart["model"])
+            self.optimizer.load_state_dict(restart["optimizer"])
+            if self.scheduler is not None:
+                self.scheduler.load_state_dict(restart["scheduler"])
+            if self.scaler is not None:
+                self.scaler.load_state_dict(restart["scaler"])
+            self.history, self.train_losses, self.val_losses = restart["history"], restart["train_losses"], restart["val_losses"]
+            best_weights, best_epoch = restart["best_weights"], restart["best_epoch"]
+            best_metric_value, best_val_loss, patience = restart["best_metric_value"], restart["best_val_loss"], restart["patience"]
+            epoch_start, batch_start, train_loss = restart["epoch"], restart["batch"], restart["train_loss"]
+            epoch_loader_rng = restart["loader_rng"]
+            train_loader.generator.set_state(epoch_loader_rng)
+            restore_rng(restart["rng"])
+        clock = CheckpointClock()
+
+        def save(epoch, batch, loss, loader_rng):
+            if restart_file is not None:
+                atomic_save({
+                    "config": context, "model": {name: value.detach().cpu().clone() for name, value in self.model.state_dict().items()},
+                    "optimizer": self.optimizer.state_dict(),
+                    "scheduler": self.scheduler.state_dict() if self.scheduler else None,
+                    "scaler": self.scaler.state_dict() if self.scaler else None,
+                    "epoch": epoch, "batch": batch, "train_loss": loss, "loader_rng": loader_rng,
+                    "history": self.history, "train_losses": self.train_losses, "val_losses": self.val_losses,
+                    "best_weights": best_weights, "best_epoch": best_epoch,
+                    "best_metric_value": best_metric_value, "best_val_loss": best_val_loss, "patience": patience,
+                    "rng": rng_state(),
+                }, restart_file)
+                clock.saved()
+
+        save(epoch_start, batch_start, train_loss, epoch_loader_rng)
+        for epoch in range(epoch_start, self.epochs):
             self.model.train()
-            train_loss = 0.0
-            for batch in train_loader:
+            if not batch_start:
+                train_loss = 0.0
+                epoch_loader_rng = train_loader.generator.get_state()
+            iterator = iter(train_loader)
+            for _ in range(batch_start):
+                next(iterator)
+            if restart is not None and batch_start:
+                restore_rng(restart["rng"])
+            for batch_index, batch in enumerate(iterator, start=batch_start):
                 Xb, yb = batch
                 Xb, yb = Xb.to(self.device), yb.to(self.device)
                 self.optimizer.zero_grad()
@@ -1120,6 +1211,8 @@ class GeneralPipeline(Evaluate):
                         if self.task_type == "regression":
                             outputs = outputs.squeeze()
                         loss = loss_fn(outputs, yb)
+                    if not torch.isfinite(loss).all():
+                        raise FloatingPointError(f"Nonfinite training loss at epoch {epoch + 1}, batch {batch_index + 1}; last safe restart checkpoint retained")
                     self.scaler.scale(loss).backward()
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
@@ -1128,10 +1221,17 @@ class GeneralPipeline(Evaluate):
                     if self.task_type == "regression":
                         outputs = outputs.squeeze()
                     loss = loss_fn(outputs, yb)
+                    if not torch.isfinite(loss).all():
+                        raise FloatingPointError(f"Nonfinite training loss at epoch {epoch + 1}, batch {batch_index + 1}; last safe restart checkpoint retained")
                     loss.backward()
                     self.optimizer.step()
                     
                 train_loss += loss.item() * Xb.size(0)
+                if clock.due() or self._stop_request.requested:
+                    save(epoch, batch_index + 1, train_loss, epoch_loader_rng)
+                    if self._stop_request.requested:
+                        raise CheckpointPause("PyTorch optimizer, scaler, RNG and minibatch progress saved")
+            save(epoch, len(train_loader), train_loss, epoch_loader_rng)
             train_loss /= len(cast(TensorDataset, train_loader.dataset))
             self.train_losses.append(train_loss)
             
@@ -1162,6 +1262,8 @@ class GeneralPipeline(Evaluate):
                             probs = torch.softmax(outputs, dim=1)  # Convert to probabilities for F1
                             all_preds.append(probs.cpu())
                         all_targets.append(yb.cpu())
+                        if not torch.isfinite(loss).all():
+                            raise FloatingPointError("Nonfinite validation loss; last safe restart checkpoint retained")
                         val_loss += loss.item() * Xb.size(0)
                 val_loss /= len(cast(TensorDataset, val_loader.dataset))
                 self.val_losses.append(val_loss)
@@ -1244,6 +1346,11 @@ class GeneralPipeline(Evaluate):
                 # No metric available yet (e.g., no val set); keep latest weights
                 best_weights = {name: param.clone().detach().cpu() for name, param in self.model.state_dict().items()}
                 best_epoch = epoch
+
+            batch_start, restart = 0, None
+            save(epoch + 1, 0, 0.0, train_loader.generator.get_state())
+            if self._stop_request.requested:
+                raise CheckpointPause("PyTorch epoch and validation state saved")
 
         if best_weights is not None:
             logger.info("Selected best epoch: %d based on selection metric", best_epoch + 1)

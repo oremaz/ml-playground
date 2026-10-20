@@ -1,0 +1,85 @@
+{
+  "commands": [
+    {
+      "files": [
+        "test_agent_metrics.py",
+        "test_agent_evidence.py"
+      ],
+      "passed": 11,
+      "skipped": 0,
+      "seconds": 46.01
+    },
+    {
+      "files": [
+        "test_agent_loop.py",
+        "test_forecasting.py",
+        "test_forecasting_ui.py",
+        "test_benchmark_agent.py",
+        "test_playground_trace.py"
+      ],
+      "passed": 61,
+      "skipped": 1,
+      "seconds": 118.4
+    },
+    {
+      "files": [
+        "test_agent_metrics.py",
+        "test_agent_evidence.py",
+        "test_benchmark_agent.py"
+      ],
+      "passed": 32,
+      "skipped": 1,
+      "seconds": 87.08
+    },
+    {
+      "files": [
+        "test_agent_metrics.py",
+        "test_agent_evidence.py",
+        "test_benchmark_agent.py"
+      ],
+      "passed": 33,
+      "skipped": 1,
+      "seconds": 149.51
+    },
+    {
+      "files": [
+        "test_agent_loop.py"
+      ],
+      "passed": 17,
+      "skipped": 0,
+      "seconds": 119.89
+    },
+    {
+      "files": [
+        "test_agent_metrics.py",
+        "test_agent_evidence.py",
+        "test_benchmark_agent.py",
+        "test_forecasting_ui.py"
+      ],
+      "passed": 35,
+      "skipped": 1,
+      "seconds": 93.53
+    },
+    {
+      "files": [
+        "test_playground_trace.py"
+      ],
+      "passed": 14,
+      "skipped": 0,
+      "seconds": 2.31
+    }
+  ],
+  "notes": [
+    "Some files were rerun after changes to wide-table proposal handling and compact feedback. Counts are recorded per invocation.",
+    "The optional skrub dependency is absent.",
+    "Interactive browser use and hosted LLM providers were not tested."
+  ],
+  "final_invocation": {
+    "command": "PYTHONPATH=. uv run python -m pytest ml_pipeline/tests/test_agent_loop.py ml_pipeline/tests/test_agent_evidence.py ml_pipeline/tests/test_agent_metrics.py ml_pipeline/tests/test_benchmark_agent.py ml_pipeline/tests/test_playground_trace.py ml_pipeline/tests/test_forecasting.py ml_pipeline/tests/test_forecasting_ui.py -q",
+    "environment": "Shared uv environment, no dependency sync, single-thread numeric libraries",
+    "passed": 78,
+    "skipped": 1,
+    "seconds": 183.83,
+    "skip_reason": "Optional skrub dependency unavailable"
+  }
+}

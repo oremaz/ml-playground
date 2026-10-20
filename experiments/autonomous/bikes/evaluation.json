@@ -1,0 +1,32 @@
+{
+  "selection": {
+    "trial": 5,
+    "model": "xgboost_regressor",
+    "augmentation": "none",
+    "r2": 0.7428821325,
+    "rmse": 78.3292007811,
+    "mae": 53.8742949168,
+    "reference_r2": -0.1105278444,
+    "reference_rmse": 183.5022307321,
+    "reference_mae": 140.3135813485,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "test_rows": 3476,
+  "scores": {
+    "r2": 0.910702645778656,
+    "rmse": 65.88673623513878,
+    "mae": 44.323028564453125
+  },
+  "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+  "checkpoint_fold": 3,
+  "test_positive_prevalence": null,
+  "diagnostic_metrics": [
+    {
+      "name": "custom_commuter_hour_rmse",
+      "kind": "rmse",
+      "rows": 687,
+      "value": 105.59498530301556
+    }
+  ]
+}

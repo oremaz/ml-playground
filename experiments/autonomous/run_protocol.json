@@ -1,0 +1,14 @@
+{
+  "revision": 3,
+  "study": "Fresh frozen-source evaluation after fixing context-memory feedback and automatic-control validation",
+  "model": "Qwen/Qwen3.8-27B",
+  "reasoning": "xhigh",
+  "maximum_trials": 5,
+  "folds": 3,
+  "model_workers": 3,
+  "operator_interventions": 0,
+  "reuses_prior_conversations": false,
+  "reuses_prior_preparations_or_fits": false,
+  "data_reuse": "Previously inspected public datasets; retrospective evaluation",
+  "final_fit": "Last development-fold saved fit; no final-driven refit"
+}

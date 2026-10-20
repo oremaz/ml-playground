@@ -1,0 +1,150 @@
+{
+  "settings": {
+    "provider": "local",
+    "model": "Qwen/Qwen3.8-27B",
+    "reasoning": "xhigh",
+    "device": "cuda",
+    "quantization": "none"
+  },
+  "comparison_identity": {
+    "datasets": {
+      "sp500_stocks.csv": "1700c1578682e4ed3d1b0394236d0fe8f44a0ebea15a3fbf7d22b93187c5af83",
+      "sp500_companies.csv": "58a4bbd983869c06f22d1ea40fde5f3a921866de685c68cfaf2c8556a2d117f9",
+      "sp500_index.csv": "9c56f1744c5518715febc5415787cadaf98cb55139b77a048260ceae4eca6684"
+    },
+    "protocol": {
+      "task": "classification",
+      "target": "drop5_next5",
+      "metric": "pr_auc",
+      "seed": 42,
+      "split": "temporal",
+      "split_column": "Date",
+      "label_end_column": "label_end_date",
+      "validation_protocol": "robust",
+      "_split_sha256": "79bdcf3cb1e130801f3e76723c9b85e9f0d9481263cf617ed5ed8375ca8cdeb6",
+      "model_workers": 3
+    },
+    "target_and_row_identity": "10b6cb44b8dcda09a7ae488f66351d2e88f7102edb08cf692ffd3cd231a140d1",
+    "objective": "At Friday's close, rank S&P 500 stocks by risk of a drop of at least 5% over the\nnext five trading observations. Use validation average precision (pr_auc), with ROC-AUC and\nprecision/recall diagnostics. The input contains daily stock prices, current company metadata and\na daily S&P 500 index. Construct past-only trailing returns (5/21/63 observations), 21-observation\nreturn volatility, 21-observation volume change and a past 21-observation index return. Sector is\navailable as static metadata with historical survivorship limitations. Price and volume of the current\nclose are known. Do not use Symbol, current market capitalization, future prices, forward returns,\nlabel-end timestamps, company identifiers or post-outcome fields as inputs. Explicitly derive the\nbinary target from the future adjusted price return and retain the timestamp at which its fifth next\nobservation is known as label_end_column. Use exact Date joins and many-to-one cardinality checks\nfor static metadata and index rows; do not join across symbols. Retain Symbol as an audit column in the returned table, excluded from model inputs. Keep Friday decision rows with\navailable past features and observed future targets, explicitly documenting dropped warmup/end\nrows. Use chronological validation with label-boundary purging. No trading edge or causal claims.\nAvailable resources: CPU Random Forest, LightGBM, XGBoost and the new regularized linear models from the registry. Optional pretrained backends are unavailable for these runs. Choose any promising families from those choices; the simulated user will approve your proposed families once. The runtime includes an untuned constant fallback automatically, so you need not request it. You can compare multiple approved models in every trial, with bounded parallel CPU fits. Use standard preprocessing initially. Primary metric and target follow the objective above. At most five trials; use diagnostics, feature subsets, and model-specific parameters when justified.",
+    "harness": {
+      "agent_loop.py": "06e1c9c31bf2b2c5ded26bbc90861760b50ce63a1031f103e01fda16823684aa",
+      "agent_workflow.py": "9406b5e0e905f5dd941478c628289e3116b2c900f34b1a36755766af515222be",
+      "agent_validation.py": "f3ae8ba55b264374be01df439f03542fb10e61da843075760c2b11051c2ab9dd",
+      "agent_diagnostics.py": "189195f9dbeb5b0f262355803e2d52b635c7ecdd48fe8695330d1e25014402e2",
+      "agent_metrics.py": "631b8315de69dde20270731c871620073af5a9ab1de7eb6b2bef98aaaca7794c",
+      "benchmark_agent.py": "5531110abaaae55c9fcc6517c0f321fbc45bf09cabf6ec9f61bbd1d4b2ec9440",
+      "playground_runtime.py": "bb3a3e2a2c8dc9902ecf7bd3e570a0387d3a6e9b1e9c0a9901394f30a361b430",
+      "pipelines_torch/models.py": "ce6413666e668a3a468080423623d6b77427d1843eb726f1d7b12226801d74c2",
+      "utils/local_qwen.py": "77276c035dfbd49ec2ef3216324dfe4174a04cdd650c137ac090f0b79b4faed6"
+    },
+    "max_trials": 5,
+    "approved_models": [
+      "lightgbm_classifier",
+      "linear_classifier",
+      "random_forest_classifier",
+      "xgboost_classifier"
+    ]
+  },
+  "comparison_fingerprint": "1a0d8a68fb2ed167fe934f8fe3a468fdb2221173e4f00fa2876ca414f81ddcde",
+  "completed": true,
+  "operator_interventions": 0,
+  "automatic_recoveries": [
+    {
+      "phase": "preparation",
+      "error": "ValueError: Local reasoning exhausted its token budget before producing an answer"
+    }
+  ],
+  "single_model_approval": true,
+  "native_tool_calls": 10,
+  "all_calls_answered": true,
+  "trials": 5,
+  "models_per_trial": [
+    [
+      "linear_classifier",
+      "random_forest_classifier",
+      "lightgbm_classifier",
+      "xgboost_classifier",
+      "constant_classifier"
+    ],
+    [
+      "linear_classifier",
+      "lightgbm_classifier",
+      "xgboost_classifier",
+      "constant_classifier"
+    ],
+    [
+      "linear_classifier",
+      "random_forest_classifier",
+      "lightgbm_classifier",
+      "xgboost_classifier",
+      "constant_classifier"
+    ],
+    [
+      "linear_classifier",
+      "lightgbm_classifier",
+      "xgboost_classifier",
+      "constant_classifier"
+    ],
+    [
+      "lightgbm_classifier",
+      "xgboost_classifier",
+      "linear_classifier",
+      "constant_classifier"
+    ]
+  ],
+  "selected": {
+    "trial": 1,
+    "model": "linear_classifier",
+    "augmentation": "none",
+    "accuracy": 0.8945415959,
+    "f1_macro": 0.4806473674,
+    "precision_positive": 0.085106383,
+    "recall_positive": 0.0095808383,
+    "roc_auc": 0.6327006399,
+    "pr_auc": 0.1622282874,
+    "reference_accuracy": 0.8969698121,
+    "reference_f1_macro": 0.4727691099,
+    "reference_precision_positive": 0.0,
+    "reference_recall_positive": 0.0,
+    "reference_roc_auc": 0.5,
+    "reference_pr_auc": 0.1030301879,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 1,
+      "model": "linear_classifier",
+      "augmentation": "none",
+      "accuracy": 0.8945415959,
+      "f1_macro": 0.4806473674,
+      "precision_positive": 0.085106383,
+      "recall_positive": 0.0095808383,
+      "roc_auc": 0.6327006399,
+      "pr_auc": 0.1622282874,
+      "reference_accuracy": 0.8969698121,
+      "reference_f1_macro": 0.4727691099,
+      "reference_precision_positive": 0.0,
+      "reference_recall_positive": 0.0,
+      "reference_roc_auc": 0.5,
+      "reference_pr_auc": 0.1030301879,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "test_rows": 16903,
+    "scores": {
+      "accuracy": 0.9351594391528131,
+      "f1_macro": 0.48415643594042823,
+      "precision_positive": 0.2,
+      "recall_positive": 0.0009149130832570906,
+      "roc_auc": 0.5900890781599657,
+      "pr_auc": 0.09405845975166888
+    },
+    "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+    "checkpoint_fold": 3,
+    "test_positive_prevalence": 0.06466307756019642
+  },
+  "explanation_review_candidates": [],
+  "explanation_review_note": "Keyword flags request human review; they are not unsupported-claim verdicts. Negated cautions may be flagged.",
+  "evaluation_caveat": "These four dataset final periods were inspected in earlier work. Reruns are retrospective, not fresh prospective tests."
+}

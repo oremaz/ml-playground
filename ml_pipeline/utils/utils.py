@@ -200,7 +200,6 @@ def load_model(
         if os.path.exists(adapter_config_path):
             # This is a PEFT model - load it specially
             from peft import PeftModel
-            from transformers import AutoModelForSequenceClassification
             import torch.nn as nn
             
             # Load metadata if available
@@ -226,8 +225,11 @@ def load_model(
             task_type = metadata.get('task_type', params.get('task_type', 'classification'))
             num_labels = params.get('num_labels', 2)
             
-            # Determine dtype based on GPU availability
-            if torch.cuda.is_available():
+            requested_device = params.get("device", "auto")
+            if str(requested_device) == "auto":
+                requested_device = "cuda" if torch.cuda.is_available() else "cpu"
+            use_cuda = str(requested_device).startswith("cuda") and torch.cuda.is_available()
+            if use_cuda:
                 try:
                     compute_capability = torch.cuda.get_device_capability()[0]
                     torch_dtype = torch.bfloat16 if compute_capability >= 8 else torch.float16
@@ -236,15 +238,21 @@ def load_model(
             else:
                 torch_dtype = torch.float32
             
-            # Load base model WITHOUT quantization (inference only)
-            base_model = AutoModelForSequenceClassification.from_pretrained(
-                base_model_name,
-                num_labels=num_labels,
-                torch_dtype=torch_dtype,
-                device_map="auto" if torch.cuda.is_available() else None,
-                low_cpu_mem_usage=True,
+            from transformers import AutoConfig
+            from ml_pipeline.pipelines_torch.models import HuggingFaceQLoRAWrapper
+
+            hf_config = AutoConfig.from_pretrained(base_model_name, trust_remote_code=True)
+            model_kwargs = {
+                "num_labels": num_labels,
+                "device_map": requested_device if use_cuda else None,
+                "low_cpu_mem_usage": True,
+                "trust_remote_code": True,
+                **HuggingFaceQLoRAWrapper._model_dtype_kwargs(torch_dtype),
+            }
+            base_model = HuggingFaceQLoRAWrapper._load_sequence_classifier(
+                base_model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype,
             )
-            
+
             # Load PEFT adapters
             model_with_adapters = PeftModel.from_pretrained(base_model, found_path)
             print("✓ PEFT adapters loaded")
@@ -253,7 +261,6 @@ def load_model(
             # Don't use the normal __init__ which would create a new model.
             # model_class is often a lambda factory (not a type) in caller notebooks,
             # so object.__new__ needs the concrete wrapper class instead.
-            from ml_pipeline.pipelines_torch.models import HuggingFaceQLoRAWrapper
             model = object.__new__(HuggingFaceQLoRAWrapper)  # Create instance without calling __init__
             nn.Module.__init__(model)  # Initialize nn.Module part
             
@@ -261,7 +268,7 @@ def load_model(
             model.model = model_with_adapters
             model.tokenizer = AutoTokenizer.from_pretrained(found_path)
             model.task_type = task_type
-            model.device = params.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
+            model.device = requested_device
             model.max_seq_length = metadata.get('max_seq_length', 512)
             model._is_quantized = False  # Loaded model is not quantized
             import inspect as _inspect

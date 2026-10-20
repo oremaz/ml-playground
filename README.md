@@ -1,116 +1,133 @@
-# ML Playground: Reproducible Experiments and Benchmarking
+# ML Playground
 
-This repository is a workspace for benchmarking ML pipelines across vision, tabular, and text tasks. The goal is to compare model families and augmentation strategies with a shared registry and consistent evaluation.
+ML benchmarking utilities and a Streamlit assistant for exploring CSV datasets.
+An LLM proposes a prediction task, prepares the data and revises experiments
+within a user-defined budget. Models share evaluation splits, and each workspace
+saves the code, predictions and observable conversation.
 
+`ml_pipeline` is also used by [NutriCoach](https://github.com/oremaz/nutricoach)
+and [AI Content Robustness](https://github.com/oremaz/ai-content-robustness).
 
-The reusable Python package is `ml_pipeline`. [NutriCoach](https://github.com/oremaz/nutricoach) and [AI Content Robustness](https://github.com/oremaz/ai-content-robustness) install it as a pinned dependency.
+## Run
 
-## Installation and quickstart
+Python 3.11+ is required; Toto 2.0 requires 3.12+.
 
 ```bash
 uv venv
-uv pip install -e ".[dev]"
-PYTHONPATH=. uv run python -m pytest ml_pipeline/tests -q
-```
-
-Install the optional experiment dependencies with `uv pip install -r requirements.txt`, or the CUDA 12.4 environment with `uv pip install -r requirements_gpu.in`. On macOS, XGBoost and LightGBM require an OpenMP runtime such as `libomp`.
-
-```python
-from ml_pipeline.pipelines_torch.benchmark import BenchmarkRunner
-from ml_pipeline.utils.utils import load_model_by_name
-```
-
-Launch the benchmark UI from the repository root after installing research dependencies:
-
-```bash
+uv pip install -e ".[research,dev]"
 PYTHONPATH=. uv run streamlit run ml_pipeline/benchmark_app.py
 ```
 
-Historical `pipelines_torch`, `utils`, and `data_augmentation` imports remain available as compatibility modules for saved checkpoints and older notebooks. New code should use `ml_pipeline` imports.
+Add `uv pip install -e ".[forecasting]"` for forecasting foundation models.
+Optional backends need their own packages and weights. For the core library and
+CPU tests, use `.[dev]` instead of `.[research,dev]`.
 
-The framework writes checkpoints to `results/` relative to the working directory. Set `ML_PIPELINE_RESULTS_DIR` to override both checkpoint reading and writing; installed code never assumes a sibling checkout. On Kaggle, the existing input/output defaults remain unchanged.
+The assistant supports OpenRouter, Groq and local Qwen. Set `OPENROUTER_API_KEY`
+or `GROQ_API_KEY`, or configure the provider in the sidebar. Defaults are
+`openrouter/free`, `qwen/qwen3.8-27b` and local `Qwen/Qwen3.8-27B`; IDs are
+editable. Reasoning defaults to `high` for hosted providers and `xhigh` for local
+Qwen. Local BF16 inference needs roughly 58 GB for weights plus working memory;
+optional 4-bit loading uses bitsandbytes.
 
----
+## CSV assistant
 
-## Repository Overview
+1. Upload CSVs, optionally describe the objective, and set a budget of **1 to 5 trials**.
+2. The assistant reads pandas profiles and sample rows, proposes a target, joins,
+   preprocessing and evaluation protocol, then generates the preparation script.
+   Inspect the proposal and approve or edit the model families once.
+3. The agent diagnoses errors and compares approved models, feature subsets, preprocessing
+   and parameters. Any trial can compare multiple models. Supported CPU methods run in
+   up to three isolated worker processes, with bounded threads.
+4. After selection is locked, the app evaluates the saved model on reserved rows.
+   Follow-ups reuse saved scripts and results. A manual script-review workflow is also available.
 
-### Core Modules
-- **`pipelines_torch/`**: The core training/evaluation framework: shared pipeline classes, model registries for vision/tabular/text (including the TabICLv2 and Google TabFM tabular foundation models), and a benchmark runner to compare models and log metrics. See [pipeline documentation](ml_pipeline/pipelines_torch/README.md). The repository requirements install the pinned TabFM release and its PyTorch backend directly from the official repository.
-- **`data_augmentation/`**: Augmentation registries and implementations for text, image, and tabular data (classical methods plus SMOTE-style samplers and LLM-based text transforms). See [augmentation documentation](ml_pipeline/data_augmentation/README.md).
-- **`utils/`**: Shared helpers used by notebooks and pipelines:
-  - **`utils/data.py`**: CSV loading, embedding parsing, splits, label encoding, class balance stats, meal type filtering.
-  - **`utils/metrics.py`**: Metric registry for classification/regression, plus ROC-AUC and PR-AUC wrappers.
-  - **`utils/visualization.py`**: Confusion matrices, regression plots, metric histories, bar charts, per-class reports.
-  - **`utils/kaggle_utils.py`**: Kaggle/local dataset resolution and downloads.
-- **`utils/ml_pipeline.utils.py`**: Results directory handling and save/load for PyTorch, sklearn, and HF/PEFT models.
+Preparation and inference errors have bounded automatic recovery with saved failure logs.
+Interrupted runs preserve committed comparisons; incomplete trials consume budget.
 
-### Logging
+Native tools cover data inspection, model approval, feature preparation,
+benchmarking, trial diagnostics, additional metrics and visualization. A persisted
+state machine handles the loop without a separate orchestration framework.
+Measured findings come from code; the LLM proposes hypotheses and follow-up tests.
+Conversational explanations still need review, and more trials do not guarantee gains.
 
-All pipeline, model wrapper, and benchmark diagnostics use Python's `logging` module. To see debug output (prediction distributions, metric details):
+Autonomous tabular sessions freeze three development folds: expanding chronological
+windows for temporal data, disjoint groups for grouped data, and stratified/plain folds
+for independent classification/regression rows. Selection uses the mean primary score;
+final evaluation uses the saved model from the last fold, without a test-driven refit.
+The training-mean/prior constant is an eligible untuned fallback. Regularized linear
+models provide another simple control when approved.
 
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
+Standard classification metrics include accuracy, macro F1, ROC-AUC and binary
+average precision. Regression uses RMSE, MAE and R². Each method's scores are
+reported alongside a constant reference derived only from training labels.
+The agent can define additional diagnostics such as recall for a class, precision within a
+review budget, or error on a specified subgroup. Definitions are explicit,
+immutable and applied to all compared trials. These diagnostics supplement the
+selection metric, which stays fixed during search. Diagnostic names use `custom_`;
+the harness adds a missing prefix automatically and returns the canonical name.
 
-#### Weights & Biases
+## Models and evaluation
 
-Experiment tracking is available through `utils/wandb_utils.py` and is wired into `BenchmarkRunner`:
+| Family | Implementations |
+|---|---|
+| Tabular | Constant/prior, Ridge/logistic regression, Random Forest, XGBoost, LightGBM, CatBoost, MLPs, stacking, TabICLv2, TabFM |
+| Forecasting | Timestral-209M, Toto 2.0, TimesFM 3.0, Chronos-2, naive baselines |
+| Text and vision | Hugging Face/PEFT, GGUF, torchvision/timm and image augmentation utilities |
 
-```python
-BenchmarkRunner(..., use_wandb=True, wandb_project="bench-research-ml")
-```
+The assistant supports tabular classification, regression and a separate
+univariate forecasting task. Text/GGUF wrappers are available in the manual
+workflow. Forecasting compares identical past-only windows and reports median
+forecasts, MAE/RMSE/sMAPE and available quantiles. It does not automatically
+convert forecasts into calibrated event probabilities. Upstream model licenses
+apply; TimesFM 3.0 pretrained weights are non-commercial.
 
-Each (model, augmentation) combination becomes one W&B run (grouped by `path_start`) with the per-epoch training history, CV summary statistics, and the checkpoint id. Notebooks that train outside `BenchmarkRunner` call `init_wandb_run` / `log_summary` / `finish_run` directly. Logging degrades gracefully: with no API key (env or `~/.netrc`) runs are written in offline mode, and a missing `wandb` package only produces a warning.
+Holdout, group, temporal and cross-validation splits are available. Iterative
+search uses frozen development folds and a reserved final partition. Forward
+labels require their observation-end timestamps so temporal boundaries can be
+purged. Preprocessors fit on training rows; resampling affects training only.
+Incomplete comparisons cannot win selection. Binary probability metrics use the
+saved label encoding's class 1 as positive. Final evaluation currently supports
+saved sklearn-compatible estimators and the forecasting adapters.
 
-### Experiments & Notebooks
-- **`benchmark_app.py`**: **Streamlit UI** for interactive model benchmarking. Upload CSV datasets, select models/augmentations from registries, configure training parameters (epochs, batch size, learning rate), and visualize results in real-time. Supports classification and regression tasks with automatic metric computation.
-- **`bench-tabular-stroke.ipynb`**: Rare early recurrent-stroke ranking from the fully anonymous, openly licensed International Stroke Trial table (19,435 rows, about 4% positive). The concise progression is dataset and objective, a 1991-1994/1995/1996 temporal split, first-pass preprocessing and SMOTE ablations, then classical models, a CUDA MLP, TabICLv2, TabFM, and the official TabPFN classifier. Selection prioritizes recall, precision, and lift inside a fixed 10% monitoring budget, with PR-AUC and Brier score as supporting criteria. A validation-selected percentile-rank ensemble is the single improvement experiment. The refactored notebook requires a new GPU run before updated results are published.
+See [pipeline documentation](ml_pipeline/pipelines_torch/README.md) for model
+registries, training, checkpoints and resuming interrupted experiments.
 
-Detection training and evaluation notebooks now live in [AI Content Robustness](https://github.com/oremaz/ai-content-robustness/tree/main/ai_content_detector/notebooks). Recipe training and benchmarking live in [NutriCoach](https://github.com/oremaz/nutricoach). Generic model wrappers and checkpoint utilities remain here.
+## Saved experiments
 
-The stroke notebook is `ml_pipeline/bench-tabular-stroke.ipynb`. Its refactored experiments require a new GPU run before updated results are published.
+Workspaces live in `results/playground_memory/`, configurable with
+`ML_PIPELINE_PLAYGROUND_MEMORY`. They retain CSVs, proposals, scripts, parameters,
+splits, checkpoints, predictions and observable conversations/tool calls.
+The app reopens saved workspaces and exports JSON/Markdown histories. Private
+model thinking and provider credentials are excluded from conversation exports.
 
-### Data Artifacts
-- **`ml_pipeline/data/`** (gitignored): local experiment datasets. Generic Kaggle download utilities remain in `ml_pipeline.utils.kaggle_utils`; detection datasets are managed by AI Content Robustness.
-  - `ml_pipeline/data/tabular_stroke/IST_corrected.csv` is downloaded directly from the University of Edinburgh DataShare record and verified against its SHA-256 checksum by the stroke notebook.
+Generated Python executes on the trusted server with that process's file and
+network permissions. Uploaded data and logs remain in local shared workspaces;
+profiles and conversation context are sent to the selected LLM provider.
+Long agent requests compact repeated inspection details; full tool outputs
+remain in the saved execution traces.
 
-### Testing
-- **`tests/`**: unit tests covering scoring (`ComputeScore`), sklearn wrappers, PyTorch and sklearn pipelines (single-split and k-fold), checkpoint save/load round-trips, and `BenchmarkRunner` epoch normalization + smoke runs.
+The latest [four logged evaluations](experiments/autonomous/README.md) include
+complete conversations for [energy](experiments/autonomous/energy/conversation.md),
+[bike sharing](experiments/autonomous/bikes/conversation.md),
+[wearable activity](experiments/autonomous/activity/conversation.md) and
+[finance](experiments/autonomous/finance/conversation.md), using local Qwen3.8-27B
+with xhigh reasoning. Reserved-data results are mixed: bikes improved, finance
+retained its first-trial model, and energy and activity worsened. The
+[action and explanation review](experiments/autonomous/explanation_review.md)
+also identifies an ineffective feature experiment and unsupported conversational
+claims. These retrospective runs demonstrate the workflow, not general superiority.
+
+## Development
 
 ```bash
 PYTHONPATH=. uv run python -m pytest ml_pipeline/tests -q
 ```
 
----
+Tests for optional backends require the corresponding extras. Agent evaluation records
+completion, recoveries, tool protocol validity, models per trial, scores and explanation
+review candidates. `python -m ml_pipeline.agent_evaluation records... --output comparison.json`
+compares LLM runs only when data, objective, targets, folds, harness and budgets match;
+keyword review flags are not automatic judgments of scientific correctness.
 
-## Checkpoints & Results
-
-Each benchmark run writes artifacts under `results/<run>/` and records a lightweight index:
-
-- `index.jsonl`: one JSON line per checkpoint, containing:
-  - `checkpoint_id` (deterministic SHA-1 hash)
-  - `model_name`, `augmentation_name`, `task_type`
-  - key hyperparams (epochs, lr, weight_decay, dropout, batch_size, kfold config)
-  - `artifact_type` and `artifact_path`
-- `*_metrics.csv`: training history keyed by `checkpoint_id`
-
-Checkpoint artifacts are saved as:
-- `results/<run>/<checkpoint_id>.pt` for PyTorch state dicts
-- `results/<run>/<checkpoint_id>.pkl` for sklearn joblib, including both `SklearnModelWrapper` instances and direct estimators such as `LogisticRegression`
-- `results/<run>/<checkpoint_id>/` for HuggingFace `save_pretrained`
-
-### Loading a checkpoint
-
-Use `ml_pipeline.utils.utils.load_model` with a `checkpoint_id` from `index.jsonl`.
-For sklearn joblib artifacts, `load_model` returns the direct estimator when the checkpoint was saved from a raw sklearn model, or restores the inner `.model` when loading into a wrapper class.
-
-For CPU validation on shared VMs, set `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 LOKY_MAX_CPU_COUNT=2` before running the tests.
-
-TabFM wrapper tests require the optional `tabular` dependencies and otherwise skip. These tests mock model loading and do not download foundation-model weights.
-
-## Split validation (2026-10-14)
-
-The complete CPU suite passed: **78 passed**. This includes historical checkpoint loading through compatibility imports, checkpoint round trips, scoring, model wrappers, training pipelines, and benchmarking. TabFM loading is mocked; no foundation-model weights are downloaded by those tests.
-
-A wheel was built and installed into a separate validation interpreter. The declared NumPy, SciPy, scikit-learn, pandas, and LightGBM versions were installed for this run. GPU experiments and the refactored stroke notebook were not executed during the migration.
+Source lives in `ml_pipeline/`. Compatibility imports under `pipelines_torch`,
+`utils` and `data_augmentation` support existing consumers and checkpoints.

@@ -1,0 +1,987 @@
+[
+  {
+    "trial": 1,
+    "measured": [
+      {
+        "id": "t1.constant_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1030301879,
+        "description": "constant_classifier/none: validation pr_auc = 0.10303"
+      },
+      {
+        "id": "t1.lightgbm_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1079122359,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.107912"
+      },
+      {
+        "id": "t1.linear_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1622282874,
+        "description": "linear_classifier/none: validation pr_auc = 0.162228"
+      },
+      {
+        "id": "t1.random_forest_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1210733679,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.121073"
+      },
+      {
+        "id": "t1.xgboost_classifier.none.pr_auc",
+        "trial": 1,
+        "value": 0.1049070275,
+        "description": "xgboost_classifier/none: validation pr_auc = 0.104907"
+      },
+      {
+        "id": "t1.linear_classifier.none.roc_auc",
+        "trial": 1,
+        "value": 0.6327006399,
+        "description": "linear_classifier/none: validation roc_auc = 0.632701"
+      },
+      {
+        "id": "t1.lightgbm_classifier.none.training.pr_auc",
+        "trial": 1,
+        "value": 0.5200100987347799,
+        "description": "lightgbm_classifier/none: in-sample training pr_auc = 0.52001"
+      },
+      {
+        "id": "t1.xgboost_classifier.none.training.pr_auc",
+        "trial": 1,
+        "value": 0.7531053940737675,
+        "description": "xgboost_classifier/none: in-sample training pr_auc = 0.753105"
+      },
+      {
+        "id": "t1.linear_classifier.none.training.pr_auc",
+        "trial": 1,
+        "value": 0.1566924808435872,
+        "description": "linear_classifier/none: in-sample training pr_auc = 0.156692"
+      },
+      {
+        "id": "t1.linear_classifier.none.fold.1.pr_auc",
+        "trial": 1,
+        "value": 0.1090131433597485,
+        "description": "linear_classifier/none: fold 1 validation pr_auc = 0.109013"
+      },
+      {
+        "id": "t1.linear_classifier.none.fold.2.pr_auc",
+        "trial": 1,
+        "value": 0.2110427110273896,
+        "description": "linear_classifier/none: fold 2 validation pr_auc = 0.211043"
+      },
+      {
+        "id": "t1.linear_classifier.none.fold.3.pr_auc",
+        "trial": 1,
+        "value": 0.1666290077990302,
+        "description": "linear_classifier/none: fold 3 validation pr_auc = 0.166629"
+      }
+    ],
+    "finding": "Baseline comparison completed: best validation pr_auc = 0.162228.",
+    "hypothesis": "Would stronger regularization let a tree ensemble match or beat the linear incumbent on pr_auc?",
+    "alternative": "The regularized trees may stay near the constant reference, leaving the linear model as the best on this split.",
+    "next_test": "Run regularized LightGBM and XGBoost (smaller leaves, higher min-child, lower learning rate, more estimators, L2) alongside the unchanged linear control.",
+    "distinguishes": "Regularized-tree pr_auc versus the linear incumbent; it measures whether the observed train/validation gap is the binding constraint, not its cause.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_classifier.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.min_child_samples",
+        "before": "(estimator default)",
+        "after": 100
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.num_leaves",
+        "before": "(estimator default)",
+        "after": 7
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.reg_lambda",
+        "before": "(estimator default)",
+        "after": 5.0
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.subsample_freq",
+        "before": "(estimator default)",
+        "after": 1
+      },
+      {
+        "setting": "model_params.random_forest_classifier",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_classifier.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.xgboost_classifier.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.xgboost_classifier.max_depth",
+        "before": "(estimator default)",
+        "after": 3
+      },
+      {
+        "setting": "model_params.xgboost_classifier.min_child_weight",
+        "before": "(estimator default)",
+        "after": 50
+      },
+      {
+        "setting": "model_params.xgboost_classifier.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_classifier.reg_lambda",
+        "before": "(estimator default)",
+        "after": 5.0
+      },
+      {
+        "setting": "model_params.xgboost_classifier.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "models",
+        "before": [
+          "linear_classifier",
+          "random_forest_classifier",
+          "lightgbm_classifier",
+          "xgboost_classifier",
+          "constant_classifier"
+        ],
+        "after": [
+          "linear_classifier",
+          "lightgbm_classifier",
+          "xgboost_classifier",
+          "constant_classifier"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "sp500_stocks.csv has 1,891,536 rows, exactly 502 symbols x 3,768 dates, but 1,273,705 rows have missing price/volume values, leaving 617,831 usable price rows; the effective Friday decision sample will be smaller after 63-day warmup and 5-day future target requirements.",
+        "sp500_companies.csv has 502 unique Symbols and sp500_index.csv has 2,517 unique Dates, supporting many-to-one joins from stock rows to company metadata and index rows without cross-symbol joins.",
+        "The target, a 5% adjusted-close drop over the next five trading observations, is likely imbalanced, so pr_auc is a suitable primary metric and ROC-AUC/precision-recall diagnostics are important.",
+        "Only Sector is used from company metadata; it has no missing values, while other metadata fields have missingness and are excluded to avoid post-outcome, identifier, or current-size leakage.",
+        "The data are current S&P 500 constituents, so historical membership changes and survivorship bias are not represented; results describe past behavior of current constituents, not index membership at past dates.",
+        "Temporal leakage is possible if training rows have future labels overlapping the validation period; label_end_date purging is required for a valid chronological validation estimate."
+      ],
+      "questions": [
+        "Should the 5% drop be measured as close-to-close adjusted return from Friday close to the close five trading observations later (t to t+5), rather than using intraday Low?",
+        "Should raw current Close and Volume be included as additional features, or should the model use only the specified derived past features and Sector?",
+        "What chronological validation boundary should be used, for example the most recent 20% of Friday decision dates or a specific date?"
+      ],
+      "preparation": "Use sp500_stocks.csv as the primary panel. Join sp500_companies.csv on Symbol with a many-to-one cardinality check (companies.Symbol unique) and sp500_index.csv on Date with a many-to-one cardinality check (index.Date unique); do not join across symbols. Parse Date and keep rows where Date is Friday. For each Symbol ordered by Date, compute past-only features using Adj Close and Volume: ret_5 = Adj Close / Adj Close.shift(5) - 1; ret_21 = Adj Close / Adj Close.shift(21) - 1; ret_63 = Adj Close / Adj Close.shift(63) - 1; daily_ret = Adj Close.pct_change(); vol_21 = daily_ret.rolling(21).std(); volume_change_21 = log1p(Volume) - log1p(Volume.shift(21)). Compute index_ret_21 = S&P500 / S&P500.shift(21) - 1 on the index table and join it back by Date. Derive target drop5_next5 = 1 if Adj Close.shift(-5) / Adj Close - 1 <= -0.05 else 0, and label_end_date = Date.shift(-5) per Symbol. Retain only Friday rows with non-null required past features, non-null target, and non-null label_end_date; this drops warmup rows lacking 63 prior observations and end rows lacking five future observations, as well as rows with missing price/volume/index values. Retain Symbol as an audit column but exclude it from features. Exclude Date, Symbol, Adj Close, Close, High, Low, Open, Volume, label_end_date, target, and all company metadata except Sector from model inputs. Use chronological validation by Date with label-boundary purging: remove training rows whose label_end_date is on or after the validation start Date.",
+      "task": "classification",
+      "table": "sp500_stocks.csv",
+      "target": "drop5_next5",
+      "label_end_column": "label_end_date",
+      "features": [
+        "ret_5",
+        "ret_21",
+        "ret_63",
+        "vol_21",
+        "volume_change_21",
+        "index_ret_21",
+        "Sector"
+      ],
+      "models": [
+        "linear_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier",
+        "constant_classifier"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "Date",
+      "metric": "pr_auc",
+      "rationale": "The objective is to rank Friday decision rows by the probability of a future 5% adjusted-close drop, which is a binary classification problem. The derived target uses only the future adjusted close at t+5, while all features are past-only or static and known at Friday close. A temporal split with label_end_date purging avoids using training labels that overlap the validation period. pr_auc is the primary metric because the drop event is likely rare and ranking quality matters; ROC-AUC and precision/recall diagnostics can be inspected. The selected models cover a regularized linear control and CPU tree ensembles suitable for tabular features with mixed numeric and categorical inputs. These are validation estimates, not independent test performance, and do not imply trading edge or causality.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_classifier": {},
+        "random_forest_classifier": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_classifier": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "num_leaves": 7,
+          "min_child_samples": 100,
+          "learning_rate": 0.05,
+          "reg_lambda": 5.0,
+          "subsample": 0.8,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.8
+        },
+        "xgboost_classifier": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "max_depth": 3,
+          "min_child_weight": 50,
+          "learning_rate": 0.05,
+          "reg_lambda": 5.0,
+          "subsample": 0.8,
+          "colsample_bytree": 0.8
+        },
+        "constant_classifier": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/finance/memory/cb36c939742c49b7b7bfd42af2b5025f/agents/bf70a1a0abea4859bd853e138d3c6091/validation_splits.json",
+      "_split_sha256": "79bdcf3cb1e130801f3e76723c9b85e9f0d9481263cf617ed5ed8375ca8cdeb6",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 2,
+    "measured": [
+      {
+        "id": "t2.constant_classifier.none.pr_auc",
+        "trial": 2,
+        "value": 0.1030301879,
+        "description": "constant_classifier/none: validation pr_auc = 0.10303"
+      },
+      {
+        "id": "t2.lightgbm_classifier.none.pr_auc",
+        "trial": 2,
+        "value": 0.1109443001,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.110944"
+      },
+      {
+        "id": "t2.linear_classifier.none.pr_auc",
+        "trial": 2,
+        "value": 0.1622282874,
+        "description": "linear_classifier/none: validation pr_auc = 0.162228"
+      },
+      {
+        "id": "t2.xgboost_classifier.none.pr_auc",
+        "trial": 2,
+        "value": 0.1156218229,
+        "description": "xgboost_classifier/none: validation pr_auc = 0.115622"
+      },
+      {
+        "id": "t2.lightgbm_classifier.none.delta_from_same_method_baseline",
+        "trial": 2,
+        "value": 0.0030320642000000037,
+        "description": "lightgbm_classifier/none: pr_auc delta_from_same_method_baseline = +0.00303206"
+      },
+      {
+        "id": "t2.xgboost_classifier.none.delta_from_same_method_baseline",
+        "trial": 2,
+        "value": 0.010714795400000005,
+        "description": "xgboost_classifier/none: pr_auc delta_from_same_method_baseline = +0.0107148"
+      }
+    ],
+    "finding": "This trial's best validation pr_auc = 0.162228; previous best = 0.162228. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would dropping the date-level index_ret_21 feature change pr_auc, especially for the trees that rank it top?",
+    "alternative": "Linear pr_auc may stay near 0.162 and the trees may remain near the constant reference, leaving the feature's contribution small on this split.",
+    "next_test": "Rerun all four approved models with baseline parameters and the same feature set minus index_ret_21.",
+    "distinguishes": "pr_auc with versus without index_ret_21 under identical parameters; it measures the feature's contribution on this split, not its cause.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "features",
+        "before": [
+          "ret_5",
+          "ret_21",
+          "ret_63",
+          "vol_21",
+          "volume_change_21",
+          "index_ret_21",
+          "Sector"
+        ],
+        "after": [
+          "ret_5",
+          "ret_21",
+          "ret_63",
+          "vol_21",
+          "volume_change_21",
+          "Sector"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "sp500_stocks.csv has 1,891,536 rows, exactly 502 symbols x 3,768 dates, but 1,273,705 rows have missing price/volume values, leaving 617,831 usable price rows; the effective Friday decision sample will be smaller after 63-day warmup and 5-day future target requirements.",
+        "sp500_companies.csv has 502 unique Symbols and sp500_index.csv has 2,517 unique Dates, supporting many-to-one joins from stock rows to company metadata and index rows without cross-symbol joins.",
+        "The target, a 5% adjusted-close drop over the next five trading observations, is likely imbalanced, so pr_auc is a suitable primary metric and ROC-AUC/precision-recall diagnostics are important.",
+        "Only Sector is used from company metadata; it has no missing values, while other metadata fields have missingness and are excluded to avoid post-outcome, identifier, or current-size leakage.",
+        "The data are current S&P 500 constituents, so historical membership changes and survivorship bias are not represented; results describe past behavior of current constituents, not index membership at past dates.",
+        "Temporal leakage is possible if training rows have future labels overlapping the validation period; label_end_date purging is required for a valid chronological validation estimate."
+      ],
+      "questions": [
+        "Should the 5% drop be measured as close-to-close adjusted return from Friday close to the close five trading observations later (t to t+5), rather than using intraday Low?",
+        "Should raw current Close and Volume be included as additional features, or should the model use only the specified derived past features and Sector?",
+        "What chronological validation boundary should be used, for example the most recent 20% of Friday decision dates or a specific date?"
+      ],
+      "preparation": "Use sp500_stocks.csv as the primary panel. Join sp500_companies.csv on Symbol with a many-to-one cardinality check (companies.Symbol unique) and sp500_index.csv on Date with a many-to-one cardinality check (index.Date unique); do not join across symbols. Parse Date and keep rows where Date is Friday. For each Symbol ordered by Date, compute past-only features using Adj Close and Volume: ret_5 = Adj Close / Adj Close.shift(5) - 1; ret_21 = Adj Close / Adj Close.shift(21) - 1; ret_63 = Adj Close / Adj Close.shift(63) - 1; daily_ret = Adj Close.pct_change(); vol_21 = daily_ret.rolling(21).std(); volume_change_21 = log1p(Volume) - log1p(Volume.shift(21)). Compute index_ret_21 = S&P500 / S&P500.shift(21) - 1 on the index table and join it back by Date. Derive target drop5_next5 = 1 if Adj Close.shift(-5) / Adj Close - 1 <= -0.05 else 0, and label_end_date = Date.shift(-5) per Symbol. Retain only Friday rows with non-null required past features, non-null target, and non-null label_end_date; this drops warmup rows lacking 63 prior observations and end rows lacking five future observations, as well as rows with missing price/volume/index values. Retain Symbol as an audit column but exclude it from features. Exclude Date, Symbol, Adj Close, Close, High, Low, Open, Volume, label_end_date, target, and all company metadata except Sector from model inputs. Use chronological validation by Date with label-boundary purging: remove training rows whose label_end_date is on or after the validation start Date.",
+      "task": "classification",
+      "table": "sp500_stocks.csv",
+      "target": "drop5_next5",
+      "label_end_column": "label_end_date",
+      "features": [
+        "ret_5",
+        "ret_21",
+        "ret_63",
+        "vol_21",
+        "volume_change_21",
+        "Sector"
+      ],
+      "models": [
+        "linear_classifier",
+        "random_forest_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier",
+        "constant_classifier"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "Date",
+      "metric": "pr_auc",
+      "rationale": "The objective is to rank Friday decision rows by the probability of a future 5% adjusted-close drop, which is a binary classification problem. The derived target uses only the future adjusted close at t+5, while all features are past-only or static and known at Friday close. A temporal split with label_end_date purging avoids using training labels that overlap the validation period. pr_auc is the primary metric because the drop event is likely rare and ranking quality matters; ROC-AUC and precision/recall diagnostics can be inspected. The selected models cover a regularized linear control and CPU tree ensembles suitable for tabular features with mixed numeric and categorical inputs. These are validation estimates, not independent test performance, and do not imply trading edge or causality.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_classifier": {},
+        "random_forest_classifier": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_classifier": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "xgboost_classifier": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "constant_classifier": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/finance/memory/cb36c939742c49b7b7bfd42af2b5025f/agents/bf70a1a0abea4859bd853e138d3c6091/validation_splits.json",
+      "_split_sha256": "79bdcf3cb1e130801f3e76723c9b85e9f0d9481263cf617ed5ed8375ca8cdeb6",
+      "use_class_weights": true,
+      "save_predictions": true,
+      "strict_model_params": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 3,
+    "measured": [
+      {
+        "id": "t3.constant_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1030301879,
+        "description": "constant_classifier/none: validation pr_auc = 0.10303"
+      },
+      {
+        "id": "t3.lightgbm_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1456118181,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.145612"
+      },
+      {
+        "id": "t3.linear_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1613469186,
+        "description": "linear_classifier/none: validation pr_auc = 0.161347"
+      },
+      {
+        "id": "t3.random_forest_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.135377459,
+        "description": "random_forest_classifier/none: validation pr_auc = 0.135377"
+      },
+      {
+        "id": "t3.xgboost_classifier.none.pr_auc",
+        "trial": 3,
+        "value": 0.1265915419,
+        "description": "xgboost_classifier/none: validation pr_auc = 0.126592"
+      },
+      {
+        "id": "t3.lightgbm_classifier.none.delta_from_same_method_baseline",
+        "trial": 3,
+        "value": 0.03769958220000001,
+        "description": "lightgbm_classifier/none: pr_auc delta_from_same_method_baseline = +0.0376996"
+      },
+      {
+        "id": "t3.xgboost_classifier.none.delta_from_same_method_baseline",
+        "trial": 3,
+        "value": 0.021684514399999993,
+        "description": "xgboost_classifier/none: pr_auc delta_from_same_method_baseline = +0.0216845"
+      },
+      {
+        "id": "t3.linear_classifier.none.delta_from_same_method_baseline",
+        "trial": 3,
+        "value": -0.0008813688000000042,
+        "description": "linear_classifier/none: pr_auc delta_from_same_method_baseline = -0.000881369"
+      }
+    ],
+    "finding": "This trial's best validation pr_auc = 0.161347; previous best = 0.162228. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would combining the index_ret_21 ablation with the trial-2 regularization push the tree ensembles above the linear incumbent on pr_auc?",
+    "alternative": "The trees may stay below the linear model, with the ablation gain as the main effect and regularization adding little on this split.",
+    "next_test": "Run LightGBM and XGBoost on the reduced feature set (no index_ret_21) with the trial-2 regularization parameters, alongside the unchanged linear control on the same features.",
+    "distinguishes": "Tree pr_auc with ablation plus regularization versus ablation alone (trial 3) and the linear control; it measures the interaction on this split, not its cause.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "features",
+        "before": [
+          "ret_5",
+          "ret_21",
+          "ret_63",
+          "vol_21",
+          "volume_change_21",
+          "index_ret_21",
+          "Sector"
+        ],
+        "after": [
+          "ret_5",
+          "ret_21",
+          "ret_63",
+          "vol_21",
+          "volume_change_21",
+          "Sector"
+        ]
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.min_child_samples",
+        "before": "(estimator default)",
+        "after": 100
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.num_leaves",
+        "before": "(estimator default)",
+        "after": 7
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.reg_lambda",
+        "before": "(estimator default)",
+        "after": 5.0
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.subsample_freq",
+        "before": "(estimator default)",
+        "after": 1
+      },
+      {
+        "setting": "model_params.random_forest_classifier",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_classifier.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.xgboost_classifier.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.xgboost_classifier.max_depth",
+        "before": "(estimator default)",
+        "after": 3
+      },
+      {
+        "setting": "model_params.xgboost_classifier.min_child_weight",
+        "before": "(estimator default)",
+        "after": 50
+      },
+      {
+        "setting": "model_params.xgboost_classifier.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_classifier.reg_lambda",
+        "before": "(estimator default)",
+        "after": 5.0
+      },
+      {
+        "setting": "model_params.xgboost_classifier.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "models",
+        "before": [
+          "linear_classifier",
+          "random_forest_classifier",
+          "lightgbm_classifier",
+          "xgboost_classifier",
+          "constant_classifier"
+        ],
+        "after": [
+          "linear_classifier",
+          "lightgbm_classifier",
+          "xgboost_classifier",
+          "constant_classifier"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "sp500_stocks.csv has 1,891,536 rows, exactly 502 symbols x 3,768 dates, but 1,273,705 rows have missing price/volume values, leaving 617,831 usable price rows; the effective Friday decision sample will be smaller after 63-day warmup and 5-day future target requirements.",
+        "sp500_companies.csv has 502 unique Symbols and sp500_index.csv has 2,517 unique Dates, supporting many-to-one joins from stock rows to company metadata and index rows without cross-symbol joins.",
+        "The target, a 5% adjusted-close drop over the next five trading observations, is likely imbalanced, so pr_auc is a suitable primary metric and ROC-AUC/precision-recall diagnostics are important.",
+        "Only Sector is used from company metadata; it has no missing values, while other metadata fields have missingness and are excluded to avoid post-outcome, identifier, or current-size leakage.",
+        "The data are current S&P 500 constituents, so historical membership changes and survivorship bias are not represented; results describe past behavior of current constituents, not index membership at past dates.",
+        "Temporal leakage is possible if training rows have future labels overlapping the validation period; label_end_date purging is required for a valid chronological validation estimate."
+      ],
+      "questions": [
+        "Should the 5% drop be measured as close-to-close adjusted return from Friday close to the close five trading observations later (t to t+5), rather than using intraday Low?",
+        "Should raw current Close and Volume be included as additional features, or should the model use only the specified derived past features and Sector?",
+        "What chronological validation boundary should be used, for example the most recent 20% of Friday decision dates or a specific date?"
+      ],
+      "preparation": "Use sp500_stocks.csv as the primary panel. Join sp500_companies.csv on Symbol with a many-to-one cardinality check (companies.Symbol unique) and sp500_index.csv on Date with a many-to-one cardinality check (index.Date unique); do not join across symbols. Parse Date and keep rows where Date is Friday. For each Symbol ordered by Date, compute past-only features using Adj Close and Volume: ret_5 = Adj Close / Adj Close.shift(5) - 1; ret_21 = Adj Close / Adj Close.shift(21) - 1; ret_63 = Adj Close / Adj Close.shift(63) - 1; daily_ret = Adj Close.pct_change(); vol_21 = daily_ret.rolling(21).std(); volume_change_21 = log1p(Volume) - log1p(Volume.shift(21)). Compute index_ret_21 = S&P500 / S&P500.shift(21) - 1 on the index table and join it back by Date. Derive target drop5_next5 = 1 if Adj Close.shift(-5) / Adj Close - 1 <= -0.05 else 0, and label_end_date = Date.shift(-5) per Symbol. Retain only Friday rows with non-null required past features, non-null target, and non-null label_end_date; this drops warmup rows lacking 63 prior observations and end rows lacking five future observations, as well as rows with missing price/volume/index values. Retain Symbol as an audit column but exclude it from features. Exclude Date, Symbol, Adj Close, Close, High, Low, Open, Volume, label_end_date, target, and all company metadata except Sector from model inputs. Use chronological validation by Date with label-boundary purging: remove training rows whose label_end_date is on or after the validation start Date.",
+      "task": "classification",
+      "table": "sp500_stocks.csv",
+      "target": "drop5_next5",
+      "label_end_column": "label_end_date",
+      "features": [
+        "ret_5",
+        "ret_21",
+        "ret_63",
+        "vol_21",
+        "volume_change_21",
+        "Sector"
+      ],
+      "models": [
+        "linear_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier",
+        "constant_classifier"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "Date",
+      "metric": "pr_auc",
+      "rationale": "The objective is to rank Friday decision rows by the probability of a future 5% adjusted-close drop, which is a binary classification problem. The derived target uses only the future adjusted close at t+5, while all features are past-only or static and known at Friday close. A temporal split with label_end_date purging avoids using training labels that overlap the validation period. pr_auc is the primary metric because the drop event is likely rare and ranking quality matters; ROC-AUC and precision/recall diagnostics can be inspected. The selected models cover a regularized linear control and CPU tree ensembles suitable for tabular features with mixed numeric and categorical inputs. These are validation estimates, not independent test performance, and do not imply trading edge or causality.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_classifier": {},
+        "random_forest_classifier": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_classifier": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "num_leaves": 7,
+          "min_child_samples": 100,
+          "learning_rate": 0.05,
+          "reg_lambda": 5.0,
+          "subsample": 0.8,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.8
+        },
+        "xgboost_classifier": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "max_depth": 3,
+          "min_child_weight": 50,
+          "learning_rate": 0.05,
+          "reg_lambda": 5.0,
+          "subsample": 0.8,
+          "colsample_bytree": 0.8
+        },
+        "constant_classifier": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/finance/memory/cb36c939742c49b7b7bfd42af2b5025f/agents/bf70a1a0abea4859bd853e138d3c6091/validation_splits.json",
+      "_split_sha256": "79bdcf3cb1e130801f3e76723c9b85e9f0d9481263cf617ed5ed8375ca8cdeb6",
+      "use_class_weights": true,
+      "save_predictions": true,
+      "strict_model_params": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 4,
+    "measured": [
+      {
+        "id": "t4.constant_classifier.none.pr_auc",
+        "trial": 4,
+        "value": 0.1030301879,
+        "description": "constant_classifier/none: validation pr_auc = 0.10303"
+      },
+      {
+        "id": "t4.lightgbm_classifier.none.pr_auc",
+        "trial": 4,
+        "value": 0.1539819797,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.153982"
+      },
+      {
+        "id": "t4.linear_classifier.none.pr_auc",
+        "trial": 4,
+        "value": 0.1613469186,
+        "description": "linear_classifier/none: validation pr_auc = 0.161347"
+      },
+      {
+        "id": "t4.xgboost_classifier.none.pr_auc",
+        "trial": 4,
+        "value": 0.1531317911,
+        "description": "xgboost_classifier/none: validation pr_auc = 0.153132"
+      },
+      {
+        "id": "t4.lightgbm_classifier.none.recall_positive",
+        "trial": 4,
+        "value": 0.6214376723,
+        "description": "lightgbm_classifier/none: validation recall_positive = 0.621438"
+      },
+      {
+        "id": "t4.lightgbm_classifier.none.precision_positive",
+        "trial": 4,
+        "value": 0.135924633,
+        "description": "lightgbm_classifier/none: validation precision_positive = 0.135925"
+      },
+      {
+        "id": "t4.xgboost_classifier.none.recall_positive",
+        "trial": 4,
+        "value": 0.6226471475,
+        "description": "xgboost_classifier/none: validation recall_positive = 0.622647"
+      },
+      {
+        "id": "t4.xgboost_classifier.none.precision_positive",
+        "trial": 4,
+        "value": 0.134804252,
+        "description": "xgboost_classifier/none: validation precision_positive = 0.134804"
+      }
+    ],
+    "finding": "This trial's best validation pr_auc = 0.161347; previous best = 0.162228. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would disabling automatic class weighting improve the tree ensembles' pr_auc on this split?",
+    "alternative": "The trees' pr_auc may stay unchanged or worsen, and the linear model may remain the best on this split.",
+    "next_test": "Run LightGBM and XGBoost with the trial-4 regularization and reduced feature set, but with use_class_weights=false, alongside the unchanged linear control.",
+    "distinguishes": "Weighted versus unweighted tree pr_auc on identical features and parameters; it measures whether class weighting helps or hurts the ranking metric on this split, not its cause.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "features",
+        "before": [
+          "ret_5",
+          "ret_21",
+          "ret_63",
+          "vol_21",
+          "volume_change_21",
+          "index_ret_21",
+          "Sector"
+        ],
+        "after": [
+          "ret_5",
+          "ret_21",
+          "ret_63",
+          "vol_21",
+          "volume_change_21",
+          "Sector"
+        ]
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.min_child_samples",
+        "before": "(estimator default)",
+        "after": 100
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.num_leaves",
+        "before": "(estimator default)",
+        "after": 7
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.reg_lambda",
+        "before": "(estimator default)",
+        "after": 5.0
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_classifier.subsample_freq",
+        "before": "(estimator default)",
+        "after": 1
+      },
+      {
+        "setting": "model_params.random_forest_classifier",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_classifier.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.xgboost_classifier.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.xgboost_classifier.max_depth",
+        "before": "(estimator default)",
+        "after": 3
+      },
+      {
+        "setting": "model_params.xgboost_classifier.min_child_weight",
+        "before": "(estimator default)",
+        "after": 50
+      },
+      {
+        "setting": "model_params.xgboost_classifier.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_classifier.reg_lambda",
+        "before": "(estimator default)",
+        "after": 5.0
+      },
+      {
+        "setting": "model_params.xgboost_classifier.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "models",
+        "before": [
+          "linear_classifier",
+          "random_forest_classifier",
+          "lightgbm_classifier",
+          "xgboost_classifier",
+          "constant_classifier"
+        ],
+        "after": [
+          "lightgbm_classifier",
+          "xgboost_classifier",
+          "linear_classifier",
+          "constant_classifier"
+        ]
+      },
+      {
+        "setting": "use_class_weights",
+        "before": true,
+        "after": false
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "sp500_stocks.csv has 1,891,536 rows, exactly 502 symbols x 3,768 dates, but 1,273,705 rows have missing price/volume values, leaving 617,831 usable price rows; the effective Friday decision sample will be smaller after 63-day warmup and 5-day future target requirements.",
+        "sp500_companies.csv has 502 unique Symbols and sp500_index.csv has 2,517 unique Dates, supporting many-to-one joins from stock rows to company metadata and index rows without cross-symbol joins.",
+        "The target, a 5% adjusted-close drop over the next five trading observations, is likely imbalanced, so pr_auc is a suitable primary metric and ROC-AUC/precision-recall diagnostics are important.",
+        "Only Sector is used from company metadata; it has no missing values, while other metadata fields have missingness and are excluded to avoid post-outcome, identifier, or current-size leakage.",
+        "The data are current S&P 500 constituents, so historical membership changes and survivorship bias are not represented; results describe past behavior of current constituents, not index membership at past dates.",
+        "Temporal leakage is possible if training rows have future labels overlapping the validation period; label_end_date purging is required for a valid chronological validation estimate."
+      ],
+      "questions": [
+        "Should the 5% drop be measured as close-to-close adjusted return from Friday close to the close five trading observations later (t to t+5), rather than using intraday Low?",
+        "Should raw current Close and Volume be included as additional features, or should the model use only the specified derived past features and Sector?",
+        "What chronological validation boundary should be used, for example the most recent 20% of Friday decision dates or a specific date?"
+      ],
+      "preparation": "Use sp500_stocks.csv as the primary panel. Join sp500_companies.csv on Symbol with a many-to-one cardinality check (companies.Symbol unique) and sp500_index.csv on Date with a many-to-one cardinality check (index.Date unique); do not join across symbols. Parse Date and keep rows where Date is Friday. For each Symbol ordered by Date, compute past-only features using Adj Close and Volume: ret_5 = Adj Close / Adj Close.shift(5) - 1; ret_21 = Adj Close / Adj Close.shift(21) - 1; ret_63 = Adj Close / Adj Close.shift(63) - 1; daily_ret = Adj Close.pct_change(); vol_21 = daily_ret.rolling(21).std(); volume_change_21 = log1p(Volume) - log1p(Volume.shift(21)). Compute index_ret_21 = S&P500 / S&P500.shift(21) - 1 on the index table and join it back by Date. Derive target drop5_next5 = 1 if Adj Close.shift(-5) / Adj Close - 1 <= -0.05 else 0, and label_end_date = Date.shift(-5) per Symbol. Retain only Friday rows with non-null required past features, non-null target, and non-null label_end_date; this drops warmup rows lacking 63 prior observations and end rows lacking five future observations, as well as rows with missing price/volume/index values. Retain Symbol as an audit column but exclude it from features. Exclude Date, Symbol, Adj Close, Close, High, Low, Open, Volume, label_end_date, target, and all company metadata except Sector from model inputs. Use chronological validation by Date with label-boundary purging: remove training rows whose label_end_date is on or after the validation start Date.",
+      "task": "classification",
+      "table": "sp500_stocks.csv",
+      "target": "drop5_next5",
+      "label_end_column": "label_end_date",
+      "features": [
+        "ret_5",
+        "ret_21",
+        "ret_63",
+        "vol_21",
+        "volume_change_21",
+        "Sector"
+      ],
+      "models": [
+        "lightgbm_classifier",
+        "xgboost_classifier",
+        "linear_classifier",
+        "constant_classifier"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "Date",
+      "metric": "pr_auc",
+      "rationale": "The objective is to rank Friday decision rows by the probability of a future 5% adjusted-close drop, which is a binary classification problem. The derived target uses only the future adjusted close at t+5, while all features are past-only or static and known at Friday close. A temporal split with label_end_date purging avoids using training labels that overlap the validation period. pr_auc is the primary metric because the drop event is likely rare and ranking quality matters; ROC-AUC and precision/recall diagnostics can be inspected. The selected models cover a regularized linear control and CPU tree ensembles suitable for tabular features with mixed numeric and categorical inputs. These are validation estimates, not independent test performance, and do not imply trading edge or causality.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_classifier": {},
+        "random_forest_classifier": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_classifier": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "num_leaves": 7,
+          "min_child_samples": 100,
+          "learning_rate": 0.05,
+          "reg_lambda": 5.0,
+          "subsample": 0.8,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.8
+        },
+        "xgboost_classifier": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "max_depth": 3,
+          "min_child_weight": 50,
+          "learning_rate": 0.05,
+          "reg_lambda": 5.0,
+          "subsample": 0.8,
+          "colsample_bytree": 0.8
+        },
+        "constant_classifier": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/finance/memory/cb36c939742c49b7b7bfd42af2b5025f/agents/bf70a1a0abea4859bd853e138d3c6091/validation_splits.json",
+      "_split_sha256": "79bdcf3cb1e130801f3e76723c9b85e9f0d9481263cf617ed5ed8375ca8cdeb6",
+      "use_class_weights": false,
+      "save_predictions": true,
+      "strict_model_params": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 5,
+    "measured": [
+      {
+        "id": "t5.constant_classifier.none.pr_auc",
+        "trial": 5,
+        "value": 0.1030301879,
+        "description": "constant_classifier/none: validation pr_auc = 0.10303"
+      },
+      {
+        "id": "t5.lightgbm_classifier.none.pr_auc",
+        "trial": 5,
+        "value": 0.1505273514,
+        "description": "lightgbm_classifier/none: validation pr_auc = 0.150527"
+      },
+      {
+        "id": "t5.linear_classifier.none.pr_auc",
+        "trial": 5,
+        "value": 0.1613469186,
+        "description": "linear_classifier/none: validation pr_auc = 0.161347"
+      },
+      {
+        "id": "t5.xgboost_classifier.none.pr_auc",
+        "trial": 5,
+        "value": 0.1526256565,
+        "description": "xgboost_classifier/none: validation pr_auc = 0.152626"
+      },
+      {
+        "id": "t5.status",
+        "trial": 5,
+        "value": "completed",
+        "description": "Trial 5 status: completed"
+      }
+    ],
+    "finding": "This trial's best validation pr_auc = 0.161347; previous best = 0.162228. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "",
+    "alternative": "Disabling class weighting left the tree ensembles below the linear incumbent on this split (0.1505/0.1526 vs 0.1613); other hyperparameters, feature combinations, and sampling variation remain untested, and no cause for the gap is established.",
+    "next_test": "",
+    "distinguishes": "",
+    "decision": "stop",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+  }
+]

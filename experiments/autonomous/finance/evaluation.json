@@ -1,0 +1,33 @@
+{
+  "selection": {
+    "trial": 1,
+    "model": "linear_classifier",
+    "augmentation": "none",
+    "accuracy": 0.8945415959,
+    "f1_macro": 0.4806473674,
+    "precision_positive": 0.085106383,
+    "recall_positive": 0.0095808383,
+    "roc_auc": 0.6327006399,
+    "pr_auc": 0.1622282874,
+    "reference_accuracy": 0.8969698121,
+    "reference_f1_macro": 0.4727691099,
+    "reference_precision_positive": 0.0,
+    "reference_recall_positive": 0.0,
+    "reference_roc_auc": 0.5,
+    "reference_pr_auc": 0.1030301879,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "test_rows": 16903,
+  "scores": {
+    "accuracy": 0.9351594391528131,
+    "f1_macro": 0.48415643594042823,
+    "precision_positive": 0.2,
+    "recall_positive": 0.0009149130832570906,
+    "roc_auc": 0.5900890781599657,
+    "pr_auc": 0.09405845975166888
+  },
+  "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+  "checkpoint_fold": 3,
+  "test_positive_prevalence": 0.06466307756019642
+}

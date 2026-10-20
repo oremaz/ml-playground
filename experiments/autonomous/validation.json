@@ -1,0 +1,25 @@
+{
+  "repair_regressions": {
+    "passed": 30,
+    "seconds": 165.74,
+    "log": "feedback_fix_tests.log"
+  },
+  "fresh_full_suite": {
+    "passed": 86,
+    "skipped": 1,
+    "seconds": 201.46,
+    "log": "checks.log",
+    "files": [
+      "test_benchmark_agent.py",
+      "test_playground_trace.py",
+      "test_agent_loop.py",
+      "test_agent_evidence.py",
+      "test_agent_metrics.py",
+      "test_agent_autonomy.py",
+      "test_forecasting.py",
+      "test_forecasting_ui.py"
+    ],
+    "skip_reason": "Optional skrub package is not installed."
+  },
+  "browser": "Not tested; Streamlit AppTest only."
+}

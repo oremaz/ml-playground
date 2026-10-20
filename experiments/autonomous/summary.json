@@ -1,0 +1,240 @@
+[
+  {
+    "domain": "energy",
+    "metric": "rmse",
+    "initial_validation": 98.6345192603,
+    "selected_validation": 93.2738474276,
+    "initial_final": 94.93196577022937,
+    "selected_final": 105.49261304115089,
+    "constant_final": 91.05617668661414,
+    "selection": {
+      "trial": 3,
+      "model": "xgboost_regressor",
+      "augmentation": "none",
+      "r2": 0.1407906016,
+      "rmse": 93.2738474276,
+      "mae": 56.2143923442,
+      "reference_r2": -0.0003679064,
+      "reference_rmse": 100.7556244877,
+      "reference_mae": 59.1097678746,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "trials": 4,
+    "native_calls": 12,
+    "predictive_families_per_trial": [
+      [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ],
+      [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ],
+      [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ],
+      [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ]
+    ],
+    "parallel_peak": 3,
+    "automatic_recoveries": [
+      {
+        "phase": "preparation",
+        "error": "ValueError: Local reasoning exhausted its token budget before producing an answer"
+      },
+      {
+        "phase": "agent",
+        "error": "ValueError: Local reasoning exhausted its token budget before producing an answer"
+      }
+    ],
+    "structured_stop": true
+  },
+  {
+    "domain": "bikes",
+    "metric": "rmse",
+    "initial_validation": 78.5378990998,
+    "selected_validation": 78.3292007811,
+    "initial_final": 70.0184287255552,
+    "selected_final": 65.88673623513878,
+    "constant_final": 241.0743280935448,
+    "selection": {
+      "trial": 5,
+      "model": "xgboost_regressor",
+      "augmentation": "none",
+      "r2": 0.7428821325,
+      "rmse": 78.3292007811,
+      "mae": 53.8742949168,
+      "reference_r2": -0.1105278444,
+      "reference_rmse": 183.5022307321,
+      "reference_mae": 140.3135813485,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "trials": 5,
+    "native_calls": 11,
+    "predictive_families_per_trial": [
+      [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ],
+      [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ],
+      [
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "random_forest_regressor",
+        "linear_regressor"
+      ],
+      [
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "random_forest_regressor",
+        "linear_regressor"
+      ],
+      [
+        "lightgbm_regressor",
+        "xgboost_regressor"
+      ]
+    ],
+    "parallel_peak": 3,
+    "automatic_recoveries": [],
+    "structured_stop": true
+  },
+  {
+    "domain": "activity",
+    "metric": "f1_macro",
+    "initial_validation": 0.9483327437,
+    "selected_validation": 0.9498272758,
+    "initial_final": 0.8688427604240833,
+    "selected_final": 0.8636886358682258,
+    "constant_final": 0.053306342780026994,
+    "selection": {
+      "trial": 2,
+      "model": "xgboost_classifier",
+      "augmentation": "none",
+      "accuracy": 0.95030313,
+      "f1_macro": 0.9498272758,
+      "roc_auc": 0.9970160239,
+      "reference_accuracy": 0.1841067571,
+      "reference_f1_macro": 0.0518234379,
+      "reference_roc_auc": 0.5,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "trials": 5,
+    "native_calls": 13,
+    "predictive_families_per_trial": [
+      [
+        "random_forest_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier",
+        "linear_classifier"
+      ],
+      [
+        "xgboost_classifier",
+        "lightgbm_classifier"
+      ],
+      [
+        "xgboost_classifier",
+        "lightgbm_classifier"
+      ],
+      [
+        "xgboost_classifier",
+        "lightgbm_classifier",
+        "linear_classifier"
+      ],
+      [
+        "xgboost_classifier",
+        "lightgbm_classifier"
+      ]
+    ],
+    "parallel_peak": 3,
+    "automatic_recoveries": [],
+    "structured_stop": true
+  },
+  {
+    "domain": "finance",
+    "metric": "pr_auc",
+    "initial_validation": 0.1622282874,
+    "selected_validation": 0.1622282874,
+    "initial_final": 0.09405845975166888,
+    "selected_final": 0.09405845975166888,
+    "constant_final": 0.06466307756019642,
+    "selection": {
+      "trial": 1,
+      "model": "linear_classifier",
+      "augmentation": "none",
+      "accuracy": 0.8945415959,
+      "f1_macro": 0.4806473674,
+      "precision_positive": 0.085106383,
+      "recall_positive": 0.0095808383,
+      "roc_auc": 0.6327006399,
+      "pr_auc": 0.1622282874,
+      "reference_accuracy": 0.8969698121,
+      "reference_f1_macro": 0.4727691099,
+      "reference_precision_positive": 0.0,
+      "reference_recall_positive": 0.0,
+      "reference_roc_auc": 0.5,
+      "reference_pr_auc": 0.1030301879,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "trials": 5,
+    "native_calls": 10,
+    "predictive_families_per_trial": [
+      [
+        "linear_classifier",
+        "random_forest_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier"
+      ],
+      [
+        "linear_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier"
+      ],
+      [
+        "linear_classifier",
+        "random_forest_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier"
+      ],
+      [
+        "linear_classifier",
+        "lightgbm_classifier",
+        "xgboost_classifier"
+      ],
+      [
+        "lightgbm_classifier",
+        "xgboost_classifier",
+        "linear_classifier"
+      ]
+    ],
+    "parallel_peak": 3,
+    "automatic_recoveries": [
+      {
+        "phase": "preparation",
+        "error": "ValueError: Local reasoning exhausted its token budget before producing an answer"
+      }
+    ],
+    "structured_stop": true
+  }
+]

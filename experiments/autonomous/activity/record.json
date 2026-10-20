@@ -1,0 +1,161 @@
+{
+  "settings": {
+    "provider": "local",
+    "model": "Qwen/Qwen3.8-27B",
+    "reasoning": "xhigh",
+    "device": "cuda",
+    "quantization": "none"
+  },
+  "comparison_identity": {
+    "datasets": {
+      "activity.csv": "a08aa4852ac3265a04a290799b4e05461766378578397f95185f677318882c74"
+    },
+    "protocol": {
+      "task": "classification",
+      "target": "activity",
+      "metric": "f1_macro",
+      "seed": 42,
+      "split": "group",
+      "split_column": "subject",
+      "label_end_column": null,
+      "validation_protocol": "robust",
+      "_split_sha256": "7ab3f7bbccf00e3cb2bae89215f86dffc1b341b9facd6aad15b719e5bfdd7d88",
+      "model_workers": 3
+    },
+    "target_and_row_identity": "66b566010d07c167480520a0d0d75e0f4fe1b0ca158c3eaeb23f16b5bd40a523",
+    "objective": "These are smartphone motion-sensor features from people walking, taking stairs,\nsitting, standing or lying down. Predict the activity for a person not seen during training. subject\nidentifies people, not an input feature; keep subjects disjoint across training, validation and final\nevaluation. Use macro F1 as the primary metric, with accuracy and class-specific errors as diagnostics.\nI care about confusing sitting with standing. There are 561 provided sensor features, already engineered\nby the dataset authors. Do not truncate to the first columns just because detailed profiles are bounded.\nUse features=['*'] with explicit exclusions if retaining all sensors; you may choose a justified subset.\nThe supplied CSV combines the original train and test files; use the app's own reproducible group split\nand do not claim comparability with the published split or new preprocessing of raw sensor signals.\nPropose preprocessing and CPU model families from the registry.\nAvailable resources: CPU Random Forest, LightGBM, XGBoost and the new regularized linear models from the registry. Optional pretrained backends are unavailable for these runs. Choose any promising families from those choices; the simulated user will approve your proposed families once. The runtime includes an untuned constant fallback automatically, so you need not request it. You can compare multiple approved models in every trial, with bounded parallel CPU fits. Use standard preprocessing initially. Primary metric and target follow the objective above. At most five trials; use diagnostics, feature subsets, and model-specific parameters when justified.",
+    "harness": {
+      "agent_loop.py": "06e1c9c31bf2b2c5ded26bbc90861760b50ce63a1031f103e01fda16823684aa",
+      "agent_workflow.py": "9406b5e0e905f5dd941478c628289e3116b2c900f34b1a36755766af515222be",
+      "agent_validation.py": "f3ae8ba55b264374be01df439f03542fb10e61da843075760c2b11051c2ab9dd",
+      "agent_diagnostics.py": "189195f9dbeb5b0f262355803e2d52b635c7ecdd48fe8695330d1e25014402e2",
+      "agent_metrics.py": "631b8315de69dde20270731c871620073af5a9ab1de7eb6b2bef98aaaca7794c",
+      "benchmark_agent.py": "5531110abaaae55c9fcc6517c0f321fbc45bf09cabf6ec9f61bbd1d4b2ec9440",
+      "playground_runtime.py": "bb3a3e2a2c8dc9902ecf7bd3e570a0387d3a6e9b1e9c0a9901394f30a361b430",
+      "pipelines_torch/models.py": "ce6413666e668a3a468080423623d6b77427d1843eb726f1d7b12226801d74c2",
+      "utils/local_qwen.py": "77276c035dfbd49ec2ef3216324dfe4174a04cdd650c137ac090f0b79b4faed6"
+    },
+    "max_trials": 5,
+    "approved_models": [
+      "lightgbm_classifier",
+      "linear_classifier",
+      "random_forest_classifier",
+      "xgboost_classifier"
+    ]
+  },
+  "comparison_fingerprint": "75db85bc7cfaf037403724d28b80af5b0e26ec80434bad0d4dcc0b0c113d0e8b",
+  "completed": true,
+  "operator_interventions": 0,
+  "automatic_recoveries": [],
+  "single_model_approval": true,
+  "native_tool_calls": 13,
+  "all_calls_answered": true,
+  "trials": 5,
+  "models_per_trial": [
+    [
+      "random_forest_classifier",
+      "lightgbm_classifier",
+      "xgboost_classifier",
+      "linear_classifier",
+      "constant_classifier"
+    ],
+    [
+      "xgboost_classifier",
+      "lightgbm_classifier",
+      "constant_classifier"
+    ],
+    [
+      "xgboost_classifier",
+      "lightgbm_classifier",
+      "constant_classifier"
+    ],
+    [
+      "xgboost_classifier",
+      "lightgbm_classifier",
+      "linear_classifier",
+      "constant_classifier"
+    ],
+    [
+      "xgboost_classifier",
+      "lightgbm_classifier",
+      "constant_classifier"
+    ]
+  ],
+  "selected": {
+    "trial": 2,
+    "model": "xgboost_classifier",
+    "augmentation": "none",
+    "accuracy": 0.95030313,
+    "f1_macro": 0.9498272758,
+    "roc_auc": 0.9970160239,
+    "reference_accuracy": 0.1841067571,
+    "reference_f1_macro": 0.0518234379,
+    "reference_roc_auc": 0.5,
+    "completed_folds": 3,
+    "expected_folds": 3
+  },
+  "final_evaluation": {
+    "selection": {
+      "trial": 2,
+      "model": "xgboost_classifier",
+      "augmentation": "none",
+      "accuracy": 0.95030313,
+      "f1_macro": 0.9498272758,
+      "roc_auc": 0.9970160239,
+      "reference_accuracy": 0.1841067571,
+      "reference_f1_macro": 0.0518234379,
+      "reference_roc_auc": 0.5,
+      "completed_folds": 3,
+      "expected_folds": 3
+    },
+    "test_rows": 2075,
+    "scores": {
+      "accuracy": 0.8597590361445783,
+      "f1_macro": 0.8636886358682258,
+      "roc_auc": 0.9763203883171082
+    },
+    "training_protocol": "Selected saved model from the last frozen development fold; no final-driven fitting or selection.",
+    "checkpoint_fold": 3,
+    "test_positive_prevalence": null,
+    "diagnostic_metrics": [
+      {
+        "name": "custom_sitting_recall",
+        "kind": "class_recall",
+        "rows": 2075,
+        "value": 0.7351351351351352,
+        "class_rows": 370
+      },
+      {
+        "name": "custom_standing_recall",
+        "kind": "class_recall",
+        "rows": 2075,
+        "value": 0.7809278350515464,
+        "class_rows": 388
+      }
+    ]
+  },
+  "explanation_review_candidates": [
+    {
+      "trial": 1,
+      "field": "distinguishes",
+      "text": "Change in macro F1 and sitting/standing recall between 400 and 100 trees; it cannot identify a cause or a ceiling."
+    },
+    {
+      "trial": 2,
+      "field": "distinguishes",
+      "text": "Change in macro F1 and sitting/standing recall between regularized and unregularized 400-tree models; it cannot identify a cause or a ceiling."
+    },
+    {
+      "trial": 3,
+      "field": "distinguishes",
+      "text": "Change in macro F1 and sitting/standing recall between the 112-feature subset and the full 561-feature set; it cannot identify a cause or a ceiling."
+    },
+    {
+      "trial": 4,
+      "field": "distinguishes",
+      "text": "Change in macro F1 and sitting/standing recall between weighted and unweighted models; it cannot identify a cause or a ceiling."
+    }
+  ],
+  "explanation_review_note": "Keyword flags request human review; they are not unsupported-claim verdicts. Negated cautions may be flagged.",
+  "evaluation_caveat": "These four dataset final periods were inspected in earlier work. Reruns are retrospective, not fresh prospective tests."
+}

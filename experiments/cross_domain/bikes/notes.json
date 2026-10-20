@@ -1,0 +1,573 @@
+[
+  {
+    "trial": 1,
+    "measured": [
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 67.859567479,
+        "description": "lightgbm_regressor/none: validation rmse = 67.8596"
+      },
+      {
+        "id": "t1.random_forest_regressor.none.rmse",
+        "trial": 1,
+        "value": 78.7590354151,
+        "description": "random_forest_regressor/none: validation rmse = 78.759"
+      },
+      {
+        "id": "t1.xgboost_regressor.none.rmse",
+        "trial": 1,
+        "value": 69.8252212559,
+        "description": "xgboost_regressor/none: validation rmse = 69.8252"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.training.rmse",
+        "trial": 1,
+        "value": 29.227211504003055,
+        "description": "lightgbm_regressor/none: in-sample training rmse = 29.2272"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.custom_commuter_hour_rmse",
+        "trial": 1,
+        "value": 97.59006406094352,
+        "description": "lightgbm_regressor/none: validation custom_commuter_hour_rmse = 97.5901 on 553 rows"
+      }
+    ],
+    "finding": "Baseline comparison completed: best validation rmse = 67.8596.",
+    "hypothesis": "Would giving the incumbent LightGBM more trees (400 vs 100) lower validation RMSE, or would the already-large train/validation gap widen?",
+    "alternative": "More trees may only reduce training RMSE while leaving or worsening validation RMSE, which would indicate the gap is not simple underfitting.",
+    "next_test": "Run LightGBM alone with n_estimators=400, all other settings at the reviewed baseline.",
+    "distinguishes": "Compares 400-tree vs 100-tree LightGBM validation RMSE; it measures a capacity effect on this split but cannot separate overfitting from temporal distribution shift.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.random_forest_regressor",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_regressor",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "models",
+        "before": [
+          "random_forest_regressor",
+          "lightgbm_regressor",
+          "xgboost_regressor"
+        ],
+        "after": [
+          "lightgbm_regressor"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "Observed: bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; 731*24=17,544 expected hourly slots, so 165 hour slots are absent and previous-hour weather joins will produce NaNs at series starts or missing hours.",
+        "Observed: instant is unique and the original columns have no missing values, but derived previous-hour weather will have missing values whenever the prior hour is absent.",
+        "Observed: casual and registered are nonnegative and their means (35.7 and 153.8) suggest registered riders dominate the total cnt (mean 189.5); using them as features would leak the target because they are unavailable at the start of the hour and sum to the target.",
+        "Observed: current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and would leak if used directly; lagging them by one hour aligns them with information available at the start of the hour.",
+        "Hypothesis: calendar features (hr, weekday, workingday, season, mnth, holiday) and previous-hour weather will be the main drivers of hourly rental demand, with working-day commuter hours 7-9 and 16-19 likely having higher counts and larger RMSE impact.",
+        "Observed: the target becomes observable one hour after the hour starts, so a temporal split should purge training rows whose label_end is on or after the validation boundary to avoid temporal leakage."
+      ],
+      "questions": [
+        "Should the 165 missing hourly slots be treated as absent observations to exclude, or should they be inserted with NaN target and imputed before modeling?",
+        "Should we report a separate RMSE diagnostic for working-day commuter hours 7-9 and 16-19 while still selecting models on overall RMSE?",
+        "Is weathersit intended to be lagged as a previous-hour weather feature along with temp, atemp, hum, and windspeed?",
+        "Should rows where casual + registered != cnt be excluded or corrected as data-quality issues?"
+      ],
+      "preparation": "Create timestamp = dteday + hr as a datetime. Create label_end = timestamp + 1h and prev_timestamp = timestamp - 1h. Validate that timestamp is unique; if duplicates exist, flag them rather than silently joining. Self-join the table to itself as current c and previous p on p.timestamp = c.prev_timestamp to obtain previous-hour weather columns weathersit_prev, temp_prev, atemp_prev, hum_prev, and windspeed_prev. Validate cardinality by confirming the join does not fan out: the number of joined rows should equal the number of current rows and no current row should have more than one previous match. Keep NaN when no previous hour exists. Create is_commuter_focus = 1 when workingday == 1 and hr is in {7, 8, 9, 16, 17, 18, 19}, else 0. Use cnt as the target. Exclude instant, dteday, timestamp, label_end, prev_timestamp, current weathersit, current temp, current atemp, current hum, current windspeed, casual, registered, and cnt from features. Fit imputation and scaling on the training portion only, with median imputation for absent previous-hour weather.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "weathersit_prev",
+        "temp_prev",
+        "atemp_prev",
+        "hum_prev",
+        "windspeed_prev",
+        "is_commuter_focus"
+      ],
+      "models": [
+        "lightgbm_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "metric": "rmse",
+      "label_end_column": "label_end",
+      "rationale": "The objective is to predict a continuous hourly rental count from information available at the start of the hour, so this is a regression task. A temporal holdout on timestamp matches the operational setting and, with label_end = timestamp + 1h, purges training rows whose outcomes are not yet observable at the validation boundary. Features are limited to known calendar variables and previous-hour weather, avoiding current-hour weather, target components, target lags, and full-data learned transforms. Standard preprocessing is appropriate for the small numeric/categorical feature set and will impute absent previous-hour weather using training-only medians. Random Forest, LightGBM, and XGBoost are the allowed CPU models; run them with registry defaults (100 trees and at most 4 threads) as three of the five allowed trials, stopping early if validation RMSE plateaus. Overall RMSE is the requested selection metric, and the is_commuter_focus flag encodes the user's high-priority working-day peak hours while diagnostics can separately inspect those hours.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_params": {
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4
+        },
+        "xgboost_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        }
+      },
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 2,
+    "measured": [
+      {
+        "id": "t2.lightgbm_regressor.none.rmse",
+        "trial": 2,
+        "value": 68.6112733881,
+        "description": "lightgbm_regressor/none: validation rmse = 68.6113"
+      },
+      {
+        "id": "t2.lightgbm_regressor.none.delta_from_same_method_baseline",
+        "trial": 2,
+        "value": 0.7517059090999965,
+        "description": "lightgbm_regressor/none: rmse delta_from_same_method_baseline = +0.751706"
+      },
+      {
+        "id": "t2.lightgbm_regressor.none.custom_commuter_hour_rmse",
+        "trial": 2,
+        "value": 96.53483142588746,
+        "description": "lightgbm_regressor/none: validation custom_commuter_hour_rmse = 96.5348 on 553 rows"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 67.859567479,
+        "description": "lightgbm_regressor/none: validation rmse = 67.8596"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 68.6113; previous best = 67.8596. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would a slower learning rate (0.05) with more trees (400) lower LightGBM validation RMSE versus the 100-tree/0.1-lr incumbent?",
+    "alternative": "It may match or worsen the incumbent, suggesting the 100-tree config is already near this feature set's practical limit on this split.",
+    "next_test": "Run LightGBM alone with learning_rate=0.05 and n_estimators=400, all else at the reviewed baseline.",
+    "distinguishes": "Compares a slower, deeper boosting schedule against the incumbent; it measures a regularization/capacity effect on this split but cannot separate overfitting from temporal distribution shift.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.random_forest_regressor",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_regressor",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "models",
+        "before": [
+          "random_forest_regressor",
+          "lightgbm_regressor",
+          "xgboost_regressor"
+        ],
+        "after": [
+          "lightgbm_regressor"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "Observed: bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; 731*24=17,544 expected hourly slots, so 165 hour slots are absent and previous-hour weather joins will produce NaNs at series starts or missing hours.",
+        "Observed: instant is unique and the original columns have no missing values, but derived previous-hour weather will have missing values whenever the prior hour is absent.",
+        "Observed: casual and registered are nonnegative and their means (35.7 and 153.8) suggest registered riders dominate the total cnt (mean 189.5); using them as features would leak the target because they are unavailable at the start of the hour and sum to the target.",
+        "Observed: current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and would leak if used directly; lagging them by one hour aligns them with information available at the start of the hour.",
+        "Hypothesis: calendar features (hr, weekday, workingday, season, mnth, holiday) and previous-hour weather will be the main drivers of hourly rental demand, with working-day commuter hours 7-9 and 16-19 likely having higher counts and larger RMSE impact.",
+        "Observed: the target becomes observable one hour after the hour starts, so a temporal split should purge training rows whose label_end is on or after the validation boundary to avoid temporal leakage."
+      ],
+      "questions": [
+        "Should the 165 missing hourly slots be treated as absent observations to exclude, or should they be inserted with NaN target and imputed before modeling?",
+        "Should we report a separate RMSE diagnostic for working-day commuter hours 7-9 and 16-19 while still selecting models on overall RMSE?",
+        "Is weathersit intended to be lagged as a previous-hour weather feature along with temp, atemp, hum, and windspeed?",
+        "Should rows where casual + registered != cnt be excluded or corrected as data-quality issues?"
+      ],
+      "preparation": "Create timestamp = dteday + hr as a datetime. Create label_end = timestamp + 1h and prev_timestamp = timestamp - 1h. Validate that timestamp is unique; if duplicates exist, flag them rather than silently joining. Self-join the table to itself as current c and previous p on p.timestamp = c.prev_timestamp to obtain previous-hour weather columns weathersit_prev, temp_prev, atemp_prev, hum_prev, and windspeed_prev. Validate cardinality by confirming the join does not fan out: the number of joined rows should equal the number of current rows and no current row should have more than one previous match. Keep NaN when no previous hour exists. Create is_commuter_focus = 1 when workingday == 1 and hr is in {7, 8, 9, 16, 17, 18, 19}, else 0. Use cnt as the target. Exclude instant, dteday, timestamp, label_end, prev_timestamp, current weathersit, current temp, current atemp, current hum, current windspeed, casual, registered, and cnt from features. Fit imputation and scaling on the training portion only, with median imputation for absent previous-hour weather.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "weathersit_prev",
+        "temp_prev",
+        "atemp_prev",
+        "hum_prev",
+        "windspeed_prev",
+        "is_commuter_focus"
+      ],
+      "models": [
+        "lightgbm_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "metric": "rmse",
+      "label_end_column": "label_end",
+      "rationale": "The objective is to predict a continuous hourly rental count from information available at the start of the hour, so this is a regression task. A temporal holdout on timestamp matches the operational setting and, with label_end = timestamp + 1h, purges training rows whose outcomes are not yet observable at the validation boundary. Features are limited to known calendar variables and previous-hour weather, avoiding current-hour weather, target components, target lags, and full-data learned transforms. Standard preprocessing is appropriate for the small numeric/categorical feature set and will impute absent previous-hour weather using training-only medians. Random Forest, LightGBM, and XGBoost are the allowed CPU models; run them with registry defaults (100 trees and at most 4 threads) as three of the five allowed trials, stopping early if validation RMSE plateaus. Overall RMSE is the requested selection metric, and the is_commuter_focus flag encodes the user's high-priority working-day peak hours while diagnostics can separately inspect those hours.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_params": {
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.05
+        },
+        "xgboost_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        }
+      },
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 3,
+    "measured": [
+      {
+        "id": "t3.lightgbm_regressor.none.rmse",
+        "trial": 3,
+        "value": 67.5937211049,
+        "description": "lightgbm_regressor/none: validation rmse = 67.5937"
+      },
+      {
+        "id": "t3.lightgbm_regressor.none.delta_from_same_method_baseline",
+        "trial": 3,
+        "value": -0.26584637410000767,
+        "description": "lightgbm_regressor/none: rmse delta_from_same_method_baseline = -0.265846"
+      },
+      {
+        "id": "t3.lightgbm_regressor.none.custom_commuter_hour_rmse",
+        "trial": 3,
+        "value": 98.00792252639101,
+        "description": "lightgbm_regressor/none: validation custom_commuter_hour_rmse = 98.0079 on 553 rows"
+      },
+      {
+        "id": "t1.xgboost_regressor.none.rmse",
+        "trial": 1,
+        "value": 69.8252212559,
+        "description": "xgboost_regressor/none: validation rmse = 69.8252"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 67.5937; previous best = 67.8596. The measured selection score improved on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would XGBoost with the same slower schedule (lr=0.05, 400 trees) close its gap to the LightGBM incumbent, or stay behind it?",
+    "alternative": "XGBoost may remain near its 69.8 baseline, indicating the LightGBM incumbent is the stronger family on this split rather than a schedule effect.",
+    "next_test": "Run XGBoost alone with learning_rate=0.05 and n_estimators=400, all else at the reviewed baseline.",
+    "distinguishes": "Compares a tuned XGBoost against the LightGBM incumbent; it measures cross-family and schedule effects on this split but cannot establish significance or a cause.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor",
+        "before": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.05
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_regressor",
+        "before": "(estimator default)",
+        "after": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.05
+        }
+      },
+      {
+        "setting": "models",
+        "before": [
+          "lightgbm_regressor"
+        ],
+        "after": [
+          "xgboost_regressor"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "Observed: bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; 731*24=17,544 expected hourly slots, so 165 hour slots are absent and previous-hour weather joins will produce NaNs at series starts or missing hours.",
+        "Observed: instant is unique and the original columns have no missing values, but derived previous-hour weather will have missing values whenever the prior hour is absent.",
+        "Observed: casual and registered are nonnegative and their means (35.7 and 153.8) suggest registered riders dominate the total cnt (mean 189.5); using them as features would leak the target because they are unavailable at the start of the hour and sum to the target.",
+        "Observed: current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and would leak if used directly; lagging them by one hour aligns them with information available at the start of the hour.",
+        "Hypothesis: calendar features (hr, weekday, workingday, season, mnth, holiday) and previous-hour weather will be the main drivers of hourly rental demand, with working-day commuter hours 7-9 and 16-19 likely having higher counts and larger RMSE impact.",
+        "Observed: the target becomes observable one hour after the hour starts, so a temporal split should purge training rows whose label_end is on or after the validation boundary to avoid temporal leakage."
+      ],
+      "questions": [
+        "Should the 165 missing hourly slots be treated as absent observations to exclude, or should they be inserted with NaN target and imputed before modeling?",
+        "Should we report a separate RMSE diagnostic for working-day commuter hours 7-9 and 16-19 while still selecting models on overall RMSE?",
+        "Is weathersit intended to be lagged as a previous-hour weather feature along with temp, atemp, hum, and windspeed?",
+        "Should rows where casual + registered != cnt be excluded or corrected as data-quality issues?"
+      ],
+      "preparation": "Create timestamp = dteday + hr as a datetime. Create label_end = timestamp + 1h and prev_timestamp = timestamp - 1h. Validate that timestamp is unique; if duplicates exist, flag them rather than silently joining. Self-join the table to itself as current c and previous p on p.timestamp = c.prev_timestamp to obtain previous-hour weather columns weathersit_prev, temp_prev, atemp_prev, hum_prev, and windspeed_prev. Validate cardinality by confirming the join does not fan out: the number of joined rows should equal the number of current rows and no current row should have more than one previous match. Keep NaN when no previous hour exists. Create is_commuter_focus = 1 when workingday == 1 and hr is in {7, 8, 9, 16, 17, 18, 19}, else 0. Use cnt as the target. Exclude instant, dteday, timestamp, label_end, prev_timestamp, current weathersit, current temp, current atemp, current hum, current windspeed, casual, registered, and cnt from features. Fit imputation and scaling on the training portion only, with median imputation for absent previous-hour weather.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "weathersit_prev",
+        "temp_prev",
+        "atemp_prev",
+        "hum_prev",
+        "windspeed_prev",
+        "is_commuter_focus"
+      ],
+      "models": [
+        "xgboost_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "metric": "rmse",
+      "label_end_column": "label_end",
+      "rationale": "The objective is to predict a continuous hourly rental count from information available at the start of the hour, so this is a regression task. A temporal holdout on timestamp matches the operational setting and, with label_end = timestamp + 1h, purges training rows whose outcomes are not yet observable at the validation boundary. Features are limited to known calendar variables and previous-hour weather, avoiding current-hour weather, target components, target lags, and full-data learned transforms. Standard preprocessing is appropriate for the small numeric/categorical feature set and will impute absent previous-hour weather using training-only medians. Random Forest, LightGBM, and XGBoost are the allowed CPU models; run them with registry defaults (100 trees and at most 4 threads) as three of the five allowed trials, stopping early if validation RMSE plateaus. Overall RMSE is the requested selection metric, and the is_commuter_focus flag encodes the user's high-priority working-day peak hours while diagnostics can separately inspect those hours.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_params": {
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "xgboost_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.05
+        }
+      },
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 4,
+    "measured": [
+      {
+        "id": "t4.xgboost_regressor.none.rmse",
+        "trial": 4,
+        "value": 72.5181449546,
+        "description": "xgboost_regressor/none: validation rmse = 72.5181"
+      },
+      {
+        "id": "t4.xgboost_regressor.none.delta_from_same_method_baseline",
+        "trial": 4,
+        "value": 2.6929236986999996,
+        "description": "xgboost_regressor/none: rmse delta_from_same_method_baseline = +2.69292"
+      },
+      {
+        "id": "t4.xgboost_regressor.none.delta_from_previous_incumbent",
+        "trial": 4,
+        "value": 4.9244238497000055,
+        "description": "xgboost_regressor/none: rmse delta_from_previous_incumbent = +4.92442"
+      },
+      {
+        "id": "t3.lightgbm_regressor.none.rmse",
+        "trial": 3,
+        "value": 67.5937211049,
+        "description": "lightgbm_regressor/none: validation rmse = 67.5937"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 72.5181; previous best = 67.5937. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would reducing LightGBM's structural complexity (num_leaves=15) on the slower schedule lower validation RMSE versus the incumbent, or would it worsen it?",
+    "alternative": "It may worsen RMSE, indicating the incumbent's leaf complexity is already appropriate and the large train/val gap is not reducible by this regularization.",
+    "next_test": "Run LightGBM alone with num_leaves=15, learning_rate=0.05, n_estimators=400, all else at the reviewed baseline.",
+    "distinguishes": "Compares a more structurally regularized LightGBM against the incumbent; it measures a regularization effect on this split but cannot separate overfitting from temporal distribution shift.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor.num_leaves",
+        "before": "(estimator default)",
+        "after": 15
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "Observed: bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; 731*24=17,544 expected hourly slots, so 165 hour slots are absent and previous-hour weather joins will produce NaNs at series starts or missing hours.",
+        "Observed: instant is unique and the original columns have no missing values, but derived previous-hour weather will have missing values whenever the prior hour is absent.",
+        "Observed: casual and registered are nonnegative and their means (35.7 and 153.8) suggest registered riders dominate the total cnt (mean 189.5); using them as features would leak the target because they are unavailable at the start of the hour and sum to the target.",
+        "Observed: current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and would leak if used directly; lagging them by one hour aligns them with information available at the start of the hour.",
+        "Hypothesis: calendar features (hr, weekday, workingday, season, mnth, holiday) and previous-hour weather will be the main drivers of hourly rental demand, with working-day commuter hours 7-9 and 16-19 likely having higher counts and larger RMSE impact.",
+        "Observed: the target becomes observable one hour after the hour starts, so a temporal split should purge training rows whose label_end is on or after the validation boundary to avoid temporal leakage."
+      ],
+      "questions": [
+        "Should the 165 missing hourly slots be treated as absent observations to exclude, or should they be inserted with NaN target and imputed before modeling?",
+        "Should we report a separate RMSE diagnostic for working-day commuter hours 7-9 and 16-19 while still selecting models on overall RMSE?",
+        "Is weathersit intended to be lagged as a previous-hour weather feature along with temp, atemp, hum, and windspeed?",
+        "Should rows where casual + registered != cnt be excluded or corrected as data-quality issues?"
+      ],
+      "preparation": "Create timestamp = dteday + hr as a datetime. Create label_end = timestamp + 1h and prev_timestamp = timestamp - 1h. Validate that timestamp is unique; if duplicates exist, flag them rather than silently joining. Self-join the table to itself as current c and previous p on p.timestamp = c.prev_timestamp to obtain previous-hour weather columns weathersit_prev, temp_prev, atemp_prev, hum_prev, and windspeed_prev. Validate cardinality by confirming the join does not fan out: the number of joined rows should equal the number of current rows and no current row should have more than one previous match. Keep NaN when no previous hour exists. Create is_commuter_focus = 1 when workingday == 1 and hr is in {7, 8, 9, 16, 17, 18, 19}, else 0. Use cnt as the target. Exclude instant, dteday, timestamp, label_end, prev_timestamp, current weathersit, current temp, current atemp, current hum, current windspeed, casual, registered, and cnt from features. Fit imputation and scaling on the training portion only, with median imputation for absent previous-hour weather.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "weathersit_prev",
+        "temp_prev",
+        "atemp_prev",
+        "hum_prev",
+        "windspeed_prev",
+        "is_commuter_focus"
+      ],
+      "models": [
+        "lightgbm_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "metric": "rmse",
+      "label_end_column": "label_end",
+      "rationale": "The objective is to predict a continuous hourly rental count from information available at the start of the hour, so this is a regression task. A temporal holdout on timestamp matches the operational setting and, with label_end = timestamp + 1h, purges training rows whose outcomes are not yet observable at the validation boundary. Features are limited to known calendar variables and previous-hour weather, avoiding current-hour weather, target components, target lags, and full-data learned transforms. Standard preprocessing is appropriate for the small numeric/categorical feature set and will impute absent previous-hour weather using training-only medians. Random Forest, LightGBM, and XGBoost are the allowed CPU models; run them with registry defaults (100 trees and at most 4 threads) as three of the five allowed trials, stopping early if validation RMSE plateaus. Overall RMSE is the requested selection metric, and the is_commuter_focus flag encodes the user's high-priority working-day peak hours while diagnostics can separately inspect those hours.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_params": {
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "num_leaves": 15,
+          "learning_rate": 0.05
+        },
+        "xgboost_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        }
+      },
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 5,
+    "measured": [
+      {
+        "id": "t5.lightgbm_regressor.none.rmse",
+        "trial": 5,
+        "value": 65.6870874452,
+        "description": "lightgbm_regressor/none: validation rmse = 65.6871"
+      },
+      {
+        "id": "t5.lightgbm_regressor.none.delta_from_previous_incumbent",
+        "trial": 5,
+        "value": -1.9066336596999918,
+        "description": "lightgbm_regressor/none: rmse delta_from_previous_incumbent = -1.90663"
+      },
+      {
+        "id": "t5.lightgbm_regressor.none.custom_commuter_hour_rmse",
+        "trial": 5,
+        "value": 91.49889815110349,
+        "description": "lightgbm_regressor/none: validation custom_commuter_hour_rmse = 91.4989 on 553 rows"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 67.859567479,
+        "description": "lightgbm_regressor/none: validation rmse = 67.8596"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 65.6871; previous best = 67.5937. The measured selection score improved on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "",
+    "alternative": "Reducing num_leaves to 15 helped on this split, but other leaf counts, feature sets, distribution shift, and sampling variation remain untested; the gain is descriptive on one split, not a proven optimum.",
+    "next_test": "",
+    "distinguishes": "",
+    "decision": "stop",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+  }
+]

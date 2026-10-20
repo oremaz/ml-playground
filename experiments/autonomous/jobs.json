@@ -1,0 +1,18 @@
+{
+  "energy": {
+    "initial": 1324482,
+    "continuation": 1324490
+  },
+  "bikes": {
+    "initial": 1324483,
+    "continuation": 1324491
+  },
+  "activity": {
+    "initial": 1324484,
+    "continuation": 1324494
+  },
+  "finance": {
+    "initial": 1324485,
+    "continuation": 1324517
+  }
+}

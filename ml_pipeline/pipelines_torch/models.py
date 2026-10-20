@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import xgboost as xgb
 import lightgbm as lgb
 from sklearn.multioutput import MultiOutputRegressor
+from ml_pipeline.forecasting_models import FORECASTING_MODEL_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,35 @@ class SklearnRandomForestClassifierWrapper(SklearnModelWrapper):
 class SklearnRandomForestRegressorWrapper(SklearnModelWrapper):
     def __init__(self, **kwargs):
         super().__init__(RandomForestRegressor, **kwargs)
+
+
+class ConstantClassifierWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        from sklearn.dummy import DummyClassifier
+        super().__init__(DummyClassifier, strategy="prior", **kwargs)
+
+
+class ConstantRegressorWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        from sklearn.dummy import DummyRegressor
+        super().__init__(DummyRegressor, **kwargs)
+
+
+    def fit(self, X, y, *args, **kwargs):
+        self.model.fit(self._to_numpy(X), np.asarray(self._to_numpy(y), dtype=np.float64))
+
+
+class LinearClassifierWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        from sklearn.linear_model import LogisticRegression
+        kwargs.setdefault("max_iter", 1000)
+        super().__init__(LogisticRegression, **kwargs)
+
+
+class LinearRegressorWrapper(SklearnModelWrapper):
+    def __init__(self, **kwargs):
+        from sklearn.linear_model import Ridge
+        super().__init__(Ridge, **kwargs)
 
 
 class XGBoostClassifierWrapper(SklearnModelWrapper):
@@ -562,16 +592,9 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         # Suppress warnings about newly initialised classification head weights
         model_kwargs["ignore_mismatched_sizes"] = True
 
-        if hf_config.model_type == "gemma4":
-            self.model = self._load_gemma4_sequence_classifier(
-                model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
-            )
-        elif hf_config.model_type in {"lfm2", "nanbeige"}:
-            self.model = self._load_causal_sequence_classifier(
-                model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
-            )
-        else:
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
+        self.model = self._load_sequence_classifier(
+            model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+        )
 
         # Some architectures (e.g. Gemma3) require an explicit token_type_ids input
         # even for single-segment classification, and raise instead of defaulting it.
@@ -644,6 +667,20 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         self.max_seq_length = max_seq_length  # Default, can be overridden in fit()
 
     @staticmethod
+    def _load_sequence_classifier(model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype):
+        from transformers import AutoModelForSequenceClassification
+
+        if hf_config.model_type == "gemma4":
+            return HuggingFaceQLoRAWrapper._load_gemma4_sequence_classifier(
+                model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+            )
+        if hf_config.model_type in {"lfm2", "nanbeige"}:
+            return HuggingFaceQLoRAWrapper._load_causal_sequence_classifier(
+                model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
+            )
+        return AutoModelForSequenceClassification.from_pretrained(model_name, **model_kwargs)
+
+    @staticmethod
     def _load_gemma4_sequence_classifier(
         model_name, hf_config, model_kwargs, num_labels, task_type, torch_dtype
     ):
@@ -688,6 +725,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             hidden_size, num_labels, bias=False, device=model.device, dtype=torch_dtype
         )
         nn.init.normal_(model.score.weight, mean=0.0, std=initializer_range)
+        model.accepts_loss_kwargs = False
         model.config.num_labels = num_labels
         model.config.problem_type = "regression" if task_type == "regression" else "single_label_classification"
         multimodal_backbone = model.model
@@ -696,6 +734,9 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             self, input_ids=None, attention_mask=None, labels=None, **kwargs
         ):
             kwargs.pop("return_dict", None)
+            kwargs.pop("output_hidden_states", None)
+            kwargs.pop("num_items_in_batch", None)
+            kwargs["use_cache"] = False
             outputs = multimodal_backbone(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -724,6 +765,9 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             token_id = getattr(self.tokenizer, attr, None)
             if hasattr(self.model, "config"):
                 setattr(self.model.config, attr, token_id)
+                get_text_config = getattr(self.model.config, "get_text_config", None)
+                if get_text_config is not None:
+                    setattr(get_text_config(), attr, token_id)
             generation_config = getattr(self.model, "generation_config", None)
             if generation_config is not None and hasattr(generation_config, attr):
                 setattr(generation_config, attr, token_id)
@@ -870,6 +914,7 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             lr_scheduler_type="constant",
             report_to="none",
             save_strategy="no",
+            save_total_limit=2,
         )
         
         # Create data collator for dynamic padding
@@ -884,6 +929,8 @@ class HuggingFaceQLoRAWrapper(nn.Module):
         
         class MetricsCallback(TrainerCallback):
             def on_epoch_end(self, args, state, control, **callback_kwargs):
+                if state.epoch is None or not np.isclose(state.epoch, round(state.epoch)):
+                    return control
                 # Get the latest log entry (contains loss)
                 if state.log_history:
                     latest_log = state.log_history[-1]
@@ -904,10 +951,66 @@ class HuggingFaceQLoRAWrapper(nn.Module):
             callbacks=[MetricsCallback()],
         )
         
-        # Train
-        trainer.train()
-        
-        # Return training history for compatibility with benchmark runner
+        from pathlib import Path
+        from ml_pipeline.utils.training_checkpoint import (
+            CheckpointClock, CheckpointPause, StopRequest, atomic_save,
+            atomic_transformers_save, load_checkpoint, restore_rng, rng_state,
+        )
+        output_dir = Path(training_args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        context = {"model_name": getattr(self.model.config, "_name_or_path", type(self.model).__name__), "epochs": num_epochs,
+                   "batch_size": training_args.per_device_train_batch_size,
+                   "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
+                   "learning_rate": training_args.learning_rate, "max_seq_length": self.max_seq_length,
+                   "texts": list(X), "labels": y}
+        context_file = output_dir / "restart_context.pt"
+        previous = load_checkpoint(context_file, context)
+        if previous is None:
+            atomic_save({"config": context}, context_file)
+        native_save = trainer._save_checkpoint
+        clock = CheckpointClock()
+
+        def save_checkpoint(model, trial=None):
+            atomic_transformers_save(trainer, native_save, model, trial, {
+                "history": training_history,
+            })
+            clock.saved()
+
+        trainer._save_checkpoint = save_checkpoint
+        checkpoints = sorted(
+            (path for path in output_dir.glob("checkpoint-*")
+             if path.is_dir() and (path / "restart_complete.pt").exists()),
+            key=lambda path: int(path.name.split("-")[-1]),
+        )
+        resume = str(checkpoints[-1]) if checkpoints else None
+        if resume:
+            training_history.extend(load_checkpoint(Path(resume) / "restart_complete.pt")["history"])
+        if previous is not None and previous.get("completed"):
+            if resume is None:
+                raise ValueError("Completed QLoRA restart has no native trainer checkpoint")
+            trainer._load_from_checkpoint(resume, self.model)
+            restore_rng(previous["rng"])
+            return training_history
+        with StopRequest() as stop_request:
+            class RestartCallback(TrainerCallback):
+                def on_train_begin(self, args, state, control, **callback_kwargs):
+                    if resume is None:
+                        trainer._save_checkpoint(trainer.model, trial=None)
+                    return control
+
+                def on_step_end(self, args, state, control, **callback_kwargs):
+                    if clock.due() or stop_request.requested:
+                        control.should_save = True
+                    if stop_request.requested:
+                        control.should_training_stop = True
+                    return control
+
+            trainer.add_callback(RestartCallback())
+            trainer.train(resume_from_checkpoint=resume)
+            trainer._save_checkpoint(trainer.model, trial=None)
+            if stop_request.requested:
+                raise CheckpointPause("QLoRA optimizer, scheduler, RNG and sampler progress saved")
+        atomic_save({"config": context, "completed": True, "rng": rng_state()}, context_file)
         return training_history
         
     def eval(self):
@@ -1067,6 +1170,8 @@ class HuggingFaceQLoRAWrapper(nn.Module):
 
 # --- Registry ---
 CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
+    "constant_classifier": ConstantClassifierWrapper,
+    "linear_classifier": LinearClassifierWrapper,
     "mlp_classifier": TorchMLPClassifier,
     "deep_mlp_classifier": lambda input_dim, num_classes=2: TorchMLPClassifier(input_dim, [512, 256, 128, 64], num_classes=num_classes, dropout=0.3, batchnorm=True),
     "random_forest_classifier": SklearnRandomForestClassifierWrapper,
@@ -1081,6 +1186,8 @@ CLASSIFICATION_MODEL_REGISTRY: Dict[str, Callable] = {
 }
 
 REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
+    "constant_regressor": ConstantRegressorWrapper,
+    "linear_regressor": LinearRegressorWrapper,
     "mlp_regressor": TorchMLPRegressor,
     "deep_mlp_regressor": lambda input_dim, output_dim: TorchMLPRegressor(input_dim, output_dim, [512, 256, 128, 64], dropout=0.3, batchnorm=True),
     "random_forest_regressor": SklearnRandomForestRegressorWrapper,
@@ -1098,4 +1205,5 @@ REGRESSION_MODEL_REGISTRY: Dict[str, Callable] = {
 MODEL_REGISTRY: Dict[str, Callable] = {
     **CLASSIFICATION_MODEL_REGISTRY,
     **REGRESSION_MODEL_REGISTRY,
+    **FORECASTING_MODEL_REGISTRY,
 }

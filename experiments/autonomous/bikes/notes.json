@@ -1,0 +1,889 @@
+[
+  {
+    "trial": 1,
+    "measured": [
+      {
+        "id": "t1.constant_regressor.none.rmse",
+        "trial": 1,
+        "value": 183.5022307321,
+        "description": "constant_regressor/none: validation rmse = 183.502"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 78.5378990998,
+        "description": "lightgbm_regressor/none: validation rmse = 78.5379"
+      },
+      {
+        "id": "t1.linear_regressor.none.rmse",
+        "trial": 1,
+        "value": 125.3069656593,
+        "description": "linear_regressor/none: validation rmse = 125.307"
+      },
+      {
+        "id": "t1.random_forest_regressor.none.rmse",
+        "trial": 1,
+        "value": 83.6827316843,
+        "description": "random_forest_regressor/none: validation rmse = 83.6827"
+      },
+      {
+        "id": "t1.xgboost_regressor.none.rmse",
+        "trial": 1,
+        "value": 80.0531318745,
+        "description": "xgboost_regressor/none: validation rmse = 80.0531"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.custom_commuter_hour_rmse",
+        "trial": 1,
+        "value": 139.05088806121628,
+        "description": "lightgbm_regressor/none: validation custom_commuter_hour_rmse = 139.051 on 1666 rows"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.fold.2.rmse",
+        "trial": 1,
+        "value": 121.66747154770869,
+        "description": "lightgbm_regressor/none: fold 2 validation rmse = 121.667"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.training.rmse",
+        "trial": 1,
+        "value": 29.30650396453847,
+        "description": "lightgbm_regressor/none: in-sample training rmse = 29.3065"
+      }
+    ],
+    "finding": "Baseline comparison completed: best validation rmse = 78.5379.",
+    "hypothesis": "Would increasing tree capacity (400 boosting rounds/trees) reduce overall RMSE by better fitting the high-count evening-commuter peaks the baseline under-predicts?",
+    "alternative": "RMSE may stay flat or worsen if the peaks are noisy rather than under-fit, or if extra rounds overfit training peaks.",
+    "next_test": "Increase n_estimators to 400 for LightGBM, XGBoost, and Random Forest (all other params default); keep linear_regressor unchanged as a control.",
+    "distinguishes": "Compares 400-round vs 100-round tree RMSE on the same frozen folds; it measures whether added capacity changes validation error, not whether the peaks are inherently unpredictable.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.random_forest_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; if one row per hour is expected, 731*24=17,544 implies up to 165 missing hour slots, so a previous-hour self-join will create some NaN weather rows.",
+        "instant is unique and should be treated as a record ID, not a feature; dteday plus hr can form a start-of-hour timestamp, and label_end = timestamp + 1 hour is needed to purge training rows whose cnt is not yet observable.",
+        "casual, registered, and cnt are same-hour outcomes; casual and registered are unavailable at the start of the hour and cnt is the target, so all three must be excluded from features to avoid temporal leakage.",
+        "The current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and must not be used directly; only previous-hour weather at timestamp - 1 hour is allowed.",
+        "cnt is right-skewed (mean 189.5, median 142, max 977) and registered dominates casual on average, but this is an observation about the target, not a usable feature because both components are post-outcome.",
+        "Calendar fields (season, yr, mnth, hr, holiday, weekday, workingday) are known at the start of the hour and are plausible drivers of commuter demand; deterministic commuter-window flags for working-day hours 7-9 and 16-19 can make the user's priority explicit.",
+        "holiday is rare (mean 0.0288) and workingday is common (mean 0.6827), so holiday effects may be sparse while working-day commuter patterns are likely important; weather columns are normalized continuous or small-integer fields.",
+        "Hypothesis: a model using calendar features plus previous-hour weather should beat the constant fallback on overall RMSE, with tree models potentially capturing nonlinear hour/weather interactions and the regularized linear model serving as a low-capacity control."
+      ],
+      "questions": [
+        "Should the previous-hour weather join be allowed to cross midnight, so that 00:00 uses the previous day's 23:00 row?",
+        "Do you want a secondary commuter-hour RMSE for working-day hours 7-9 and 16-19 reported alongside overall RMSE, while overall RMSE remains the selection metric?",
+        "Should a prev_weather_missing indicator be added in a later trial to capture missing previous-hour observations after train-fitted imputation?"
+      ],
+      "preparation": "Create timestamp = pd.to_datetime(dteday) + pd.to_timedelta(hr, unit='h') and label_end = timestamp + pd.Timedelta(hours=1). Validate that timestamp is unique; if duplicates exist, investigate before joining. Create prev_timestamp = timestamp - pd.Timedelta(hours=1) and left-join the table to itself on prev_timestamp = timestamp, selecting weathersit, temp, atemp, hum, windspeed as prev_weathersit, prev_temp, prev_atemp, prev_hum, prev_windspeed. Validate cardinality as 1:1 or 1:0 from current row to previous row; keep missing previous-hour weather as NaN for train-fitted imputation. Create deterministic features is_morning_commuter = workingday == 1 and hr in {7,8,9}, and is_evening_commuter = workingday == 1 and hr in {16,17,18,19}. Exclude instant, dteday, timestamp, label_end, prev_timestamp, casual, registered, cnt, and current-hour weather columns (weathersit, temp, atemp, hum, windspeed) from features. Use the explicit feature list below; no target lags and no full-data learned transforms.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "prev_weathersit",
+        "prev_temp",
+        "prev_atemp",
+        "prev_hum",
+        "prev_windspeed",
+        "is_morning_commuter",
+        "is_evening_commuter"
+      ],
+      "models": [
+        "linear_regressor",
+        "random_forest_regressor",
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "label_end_column": "label_end",
+      "metric": "rmse",
+      "rationale": "The objective is a forward-looking hourly count prediction, so a temporal holdout on timestamp with label_end purging prevents using rows whose cnt becomes observable after the validation boundary. Previous-hour weather is the only weather signal allowed, and the self-join with cardinality validation avoids many-to-many leakage while preserving missing histories for train-fitted imputation. Calendar features and commuter-window flags address the known start-of-hour information and the user's priority on working-day commuter hours. The regularized linear model provides a scaled low-capacity baseline, while Random Forest, LightGBM, and XGBoost provide CPU nonlinear tree baselines that can capture hour, weather, and commuter interactions; overall RMSE is used for selection as requested. This initial trial uses the full proposed feature set; later trials can use diagnostics to drop weak features or adjust tree parameters if justified. Validation RMSE is an estimate, not independent test performance.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4
+        },
+        "xgboost_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/bikes/memory/37d75c8462464d4caf0633eb58dace4a/agents/2e5bc664fd2044b8a839487277e823a0/validation_splits.json",
+      "_split_sha256": "dc3b6815afa9a11656004ec751ccc372a270621b118e3a0c06979d307032c523",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 2,
+    "measured": [
+      {
+        "id": "t2.constant_regressor.none.rmse",
+        "trial": 2,
+        "value": 183.5022307321,
+        "description": "constant_regressor/none: validation rmse = 183.502"
+      },
+      {
+        "id": "t2.lightgbm_regressor.none.rmse",
+        "trial": 2,
+        "value": 78.5390492163,
+        "description": "lightgbm_regressor/none: validation rmse = 78.539"
+      },
+      {
+        "id": "t2.linear_regressor.none.rmse",
+        "trial": 2,
+        "value": 125.3069656593,
+        "description": "linear_regressor/none: validation rmse = 125.307"
+      },
+      {
+        "id": "t2.random_forest_regressor.none.rmse",
+        "trial": 2,
+        "value": 83.5350810368,
+        "description": "random_forest_regressor/none: validation rmse = 83.5351"
+      },
+      {
+        "id": "t2.xgboost_regressor.none.rmse",
+        "trial": 2,
+        "value": 80.4176750678,
+        "description": "xgboost_regressor/none: validation rmse = 80.4177"
+      },
+      {
+        "id": "t2.change.0",
+        "trial": 2,
+        "value": {
+          "setting": "model_params.lightgbm_regressor.n_estimators",
+          "before": 100,
+          "after": 400
+        },
+        "description": "Executed model_params.lightgbm_regressor.n_estimators: 100 -> 400"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 78.539; previous best = 78.5379. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would adding explicit prev-weather × commuter-window interaction features reduce overall RMSE by making the weather effect in the user's priority hours more direct for the trees?",
+    "alternative": "RMSE may stay flat or worsen if the trees already capture these interactions, or if the added features contribute noise.",
+    "next_test": "Add three deterministic interaction features (prev_temp × is_evening_commuter, prev_temp × is_morning_commuter, prev_hum × is_evening_commuter) and re-run LightGBM, XGBoost, and Random Forest at 100 trees plus linear as a control.",
+    "distinguishes": "Compares RMSE with vs without the explicit interaction features on the same frozen folds and baseline tree capacity; it measures whether the added features change validation error, not whether the interactions are the true driver.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "feature_recipes",
+        "before": [],
+        "after": [
+          {
+            "name": "prev_temp_evening",
+            "op": "product",
+            "left": "prev_temp",
+            "right": "is_evening_commuter"
+          },
+          {
+            "name": "prev_temp_morning",
+            "op": "product",
+            "left": "prev_temp",
+            "right": "is_morning_commuter"
+          },
+          {
+            "name": "prev_hum_evening",
+            "op": "product",
+            "left": "prev_hum",
+            "right": "is_evening_commuter"
+          }
+        ]
+      },
+      {
+        "setting": "features",
+        "before": [
+          "season",
+          "yr",
+          "mnth",
+          "hr",
+          "holiday",
+          "weekday",
+          "workingday",
+          "prev_weathersit",
+          "prev_temp",
+          "prev_atemp",
+          "prev_hum",
+          "prev_windspeed",
+          "is_morning_commuter",
+          "is_evening_commuter"
+        ],
+        "after": [
+          "season",
+          "yr",
+          "mnth",
+          "hr",
+          "holiday",
+          "weekday",
+          "workingday",
+          "prev_weathersit",
+          "prev_temp",
+          "prev_atemp",
+          "prev_hum",
+          "prev_windspeed",
+          "is_morning_commuter",
+          "is_evening_commuter",
+          "prev_temp_evening",
+          "prev_temp_morning",
+          "prev_hum_evening"
+        ]
+      },
+      {
+        "setting": "models",
+        "before": [
+          "linear_regressor",
+          "random_forest_regressor",
+          "lightgbm_regressor",
+          "xgboost_regressor",
+          "constant_regressor"
+        ],
+        "after": [
+          "lightgbm_regressor",
+          "xgboost_regressor",
+          "random_forest_regressor",
+          "linear_regressor",
+          "constant_regressor"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; if one row per hour is expected, 731*24=17,544 implies up to 165 missing hour slots, so a previous-hour self-join will create some NaN weather rows.",
+        "instant is unique and should be treated as a record ID, not a feature; dteday plus hr can form a start-of-hour timestamp, and label_end = timestamp + 1 hour is needed to purge training rows whose cnt is not yet observable.",
+        "casual, registered, and cnt are same-hour outcomes; casual and registered are unavailable at the start of the hour and cnt is the target, so all three must be excluded from features to avoid temporal leakage.",
+        "The current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and must not be used directly; only previous-hour weather at timestamp - 1 hour is allowed.",
+        "cnt is right-skewed (mean 189.5, median 142, max 977) and registered dominates casual on average, but this is an observation about the target, not a usable feature because both components are post-outcome.",
+        "Calendar fields (season, yr, mnth, hr, holiday, weekday, workingday) are known at the start of the hour and are plausible drivers of commuter demand; deterministic commuter-window flags for working-day hours 7-9 and 16-19 can make the user's priority explicit.",
+        "holiday is rare (mean 0.0288) and workingday is common (mean 0.6827), so holiday effects may be sparse while working-day commuter patterns are likely important; weather columns are normalized continuous or small-integer fields.",
+        "Hypothesis: a model using calendar features plus previous-hour weather should beat the constant fallback on overall RMSE, with tree models potentially capturing nonlinear hour/weather interactions and the regularized linear model serving as a low-capacity control."
+      ],
+      "questions": [
+        "Should the previous-hour weather join be allowed to cross midnight, so that 00:00 uses the previous day's 23:00 row?",
+        "Do you want a secondary commuter-hour RMSE for working-day hours 7-9 and 16-19 reported alongside overall RMSE, while overall RMSE remains the selection metric?",
+        "Should a prev_weather_missing indicator be added in a later trial to capture missing previous-hour observations after train-fitted imputation?"
+      ],
+      "preparation": "Create timestamp = pd.to_datetime(dteday) + pd.to_timedelta(hr, unit='h') and label_end = timestamp + pd.Timedelta(hours=1). Validate that timestamp is unique; if duplicates exist, investigate before joining. Create prev_timestamp = timestamp - pd.Timedelta(hours=1) and left-join the table to itself on prev_timestamp = timestamp, selecting weathersit, temp, atemp, hum, windspeed as prev_weathersit, prev_temp, prev_atemp, prev_hum, prev_windspeed. Validate cardinality as 1:1 or 1:0 from current row to previous row; keep missing previous-hour weather as NaN for train-fitted imputation. Create deterministic features is_morning_commuter = workingday == 1 and hr in {7,8,9}, and is_evening_commuter = workingday == 1 and hr in {16,17,18,19}. Exclude instant, dteday, timestamp, label_end, prev_timestamp, casual, registered, cnt, and current-hour weather columns (weathersit, temp, atemp, hum, windspeed) from features. Use the explicit feature list below; no target lags and no full-data learned transforms.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "prev_weathersit",
+        "prev_temp",
+        "prev_atemp",
+        "prev_hum",
+        "prev_windspeed",
+        "is_morning_commuter",
+        "is_evening_commuter",
+        "prev_temp_evening",
+        "prev_temp_morning",
+        "prev_hum_evening"
+      ],
+      "models": [
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "random_forest_regressor",
+        "linear_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "label_end_column": "label_end",
+      "metric": "rmse",
+      "rationale": "The objective is a forward-looking hourly count prediction, so a temporal holdout on timestamp with label_end purging prevents using rows whose cnt becomes observable after the validation boundary. Previous-hour weather is the only weather signal allowed, and the self-join with cardinality validation avoids many-to-many leakage while preserving missing histories for train-fitted imputation. Calendar features and commuter-window flags address the known start-of-hour information and the user's priority on working-day commuter hours. The regularized linear model provides a scaled low-capacity baseline, while Random Forest, LightGBM, and XGBoost provide CPU nonlinear tree baselines that can capture hour, weather, and commuter interactions; overall RMSE is used for selection as requested. This initial trial uses the full proposed feature set; later trials can use diagnostics to drop weak features or adjust tree parameters if justified. Validation RMSE is an estimate, not independent test performance.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "xgboost_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/bikes/memory/37d75c8462464d4caf0633eb58dace4a/agents/2e5bc664fd2044b8a839487277e823a0/validation_splits.json",
+      "_split_sha256": "dc3b6815afa9a11656004ec751ccc372a270621b118e3a0c06979d307032c523",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": [
+      {
+        "name": "prev_temp_evening",
+        "op": "product",
+        "left": "prev_temp",
+        "right": "is_evening_commuter"
+      },
+      {
+        "name": "prev_temp_morning",
+        "op": "product",
+        "left": "prev_temp",
+        "right": "is_morning_commuter"
+      },
+      {
+        "name": "prev_hum_evening",
+        "op": "product",
+        "left": "prev_hum",
+        "right": "is_evening_commuter"
+      }
+    ]
+  },
+  {
+    "trial": 3,
+    "measured": [
+      {
+        "id": "t3.constant_regressor.none.rmse",
+        "trial": 3,
+        "value": 183.5022307321,
+        "description": "constant_regressor/none: validation rmse = 183.502"
+      },
+      {
+        "id": "t3.lightgbm_regressor.none.rmse",
+        "trial": 3,
+        "value": 79.3935976655,
+        "description": "lightgbm_regressor/none: validation rmse = 79.3936"
+      },
+      {
+        "id": "t3.linear_regressor.none.rmse",
+        "trial": 3,
+        "value": 124.2031243851,
+        "description": "linear_regressor/none: validation rmse = 124.203"
+      },
+      {
+        "id": "t3.random_forest_regressor.none.rmse",
+        "trial": 3,
+        "value": 84.5564431079,
+        "description": "random_forest_regressor/none: validation rmse = 84.5564"
+      },
+      {
+        "id": "t3.xgboost_regressor.none.rmse",
+        "trial": 3,
+        "value": 82.4361931849,
+        "description": "xgboost_regressor/none: validation rmse = 82.4362"
+      },
+      {
+        "id": "t3.change.0",
+        "trial": 3,
+        "value": {
+          "setting": "feature_recipes",
+          "before": [],
+          "after": [
+            {
+              "name": "prev_temp_evening",
+              "op": "product",
+              "left": "prev_temp",
+              "right": "is_evening_commuter"
+            },
+            {
+              "name": "prev_temp_morning",
+              "op": "product",
+              "left": "prev_temp",
+              "right": "is_morning_commuter"
+            },
+            {
+              "name": "prev_hum_evening",
+              "op": "product",
+              "left": "prev_hum",
+              "right": "is_evening_commuter"
+            }
+          ]
+        },
+        "description": "Executed feature_recipes: [] -> [{'name': 'prev_temp_evening', 'op': 'product', 'left': 'prev_temp', 'right': 'is_evening_commuter'}, {'name': 'prev_temp_morning', 'op': 'product', 'left': 'prev_temp', 'right': 'is_morning_commuter'}, {'name': 'prev_hum_evening', 'op': 'product', 'left': 'prev_hum', 'right': 'is_evening_commuter'}]"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 78.5378990998,
+        "description": "lightgbm_regressor/none: validation rmse = 78.5379"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 79.3936; previous best = 78.5379. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would dropping the three low-importance features (prev_windspeed, prev_weathersit, holiday) reduce overall RMSE, or do they still contribute?",
+    "alternative": "RMSE may stay flat or worsen if those features carry weak but real signal, or if the added interaction features were the problem rather than the base feature set.",
+    "next_test": "Re-run LightGBM, XGBoost, and Random Forest at 100 trees plus the linear control on the reviewed feature set minus prev_windspeed, prev_weathersit, and holiday; reset the interaction recipes.",
+    "distinguishes": "Compares RMSE with versus without the three low-importance features on the same frozen folds and baseline tree capacity; it measures whether the ablation changes validation error, not whether those features are the true driver.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "features",
+        "before": [
+          "season",
+          "yr",
+          "mnth",
+          "hr",
+          "holiday",
+          "weekday",
+          "workingday",
+          "prev_weathersit",
+          "prev_temp",
+          "prev_atemp",
+          "prev_hum",
+          "prev_windspeed",
+          "is_morning_commuter",
+          "is_evening_commuter"
+        ],
+        "after": [
+          "season",
+          "yr",
+          "mnth",
+          "hr",
+          "weekday",
+          "workingday",
+          "prev_temp",
+          "prev_atemp",
+          "prev_hum",
+          "is_morning_commuter",
+          "is_evening_commuter"
+        ]
+      },
+      {
+        "setting": "models",
+        "before": [
+          "linear_regressor",
+          "random_forest_regressor",
+          "lightgbm_regressor",
+          "xgboost_regressor",
+          "constant_regressor"
+        ],
+        "after": [
+          "lightgbm_regressor",
+          "xgboost_regressor",
+          "random_forest_regressor",
+          "linear_regressor",
+          "constant_regressor"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; if one row per hour is expected, 731*24=17,544 implies up to 165 missing hour slots, so a previous-hour self-join will create some NaN weather rows.",
+        "instant is unique and should be treated as a record ID, not a feature; dteday plus hr can form a start-of-hour timestamp, and label_end = timestamp + 1 hour is needed to purge training rows whose cnt is not yet observable.",
+        "casual, registered, and cnt are same-hour outcomes; casual and registered are unavailable at the start of the hour and cnt is the target, so all three must be excluded from features to avoid temporal leakage.",
+        "The current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and must not be used directly; only previous-hour weather at timestamp - 1 hour is allowed.",
+        "cnt is right-skewed (mean 189.5, median 142, max 977) and registered dominates casual on average, but this is an observation about the target, not a usable feature because both components are post-outcome.",
+        "Calendar fields (season, yr, mnth, hr, holiday, weekday, workingday) are known at the start of the hour and are plausible drivers of commuter demand; deterministic commuter-window flags for working-day hours 7-9 and 16-19 can make the user's priority explicit.",
+        "holiday is rare (mean 0.0288) and workingday is common (mean 0.6827), so holiday effects may be sparse while working-day commuter patterns are likely important; weather columns are normalized continuous or small-integer fields.",
+        "Hypothesis: a model using calendar features plus previous-hour weather should beat the constant fallback on overall RMSE, with tree models potentially capturing nonlinear hour/weather interactions and the regularized linear model serving as a low-capacity control."
+      ],
+      "questions": [
+        "Should the previous-hour weather join be allowed to cross midnight, so that 00:00 uses the previous day's 23:00 row?",
+        "Do you want a secondary commuter-hour RMSE for working-day hours 7-9 and 16-19 reported alongside overall RMSE, while overall RMSE remains the selection metric?",
+        "Should a prev_weather_missing indicator be added in a later trial to capture missing previous-hour observations after train-fitted imputation?"
+      ],
+      "preparation": "Create timestamp = pd.to_datetime(dteday) + pd.to_timedelta(hr, unit='h') and label_end = timestamp + pd.Timedelta(hours=1). Validate that timestamp is unique; if duplicates exist, investigate before joining. Create prev_timestamp = timestamp - pd.Timedelta(hours=1) and left-join the table to itself on prev_timestamp = timestamp, selecting weathersit, temp, atemp, hum, windspeed as prev_weathersit, prev_temp, prev_atemp, prev_hum, prev_windspeed. Validate cardinality as 1:1 or 1:0 from current row to previous row; keep missing previous-hour weather as NaN for train-fitted imputation. Create deterministic features is_morning_commuter = workingday == 1 and hr in {7,8,9}, and is_evening_commuter = workingday == 1 and hr in {16,17,18,19}. Exclude instant, dteday, timestamp, label_end, prev_timestamp, casual, registered, cnt, and current-hour weather columns (weathersit, temp, atemp, hum, windspeed) from features. Use the explicit feature list below; no target lags and no full-data learned transforms.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "weekday",
+        "workingday",
+        "prev_temp",
+        "prev_atemp",
+        "prev_hum",
+        "is_morning_commuter",
+        "is_evening_commuter"
+      ],
+      "models": [
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "random_forest_regressor",
+        "linear_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "label_end_column": "label_end",
+      "metric": "rmse",
+      "rationale": "The objective is a forward-looking hourly count prediction, so a temporal holdout on timestamp with label_end purging prevents using rows whose cnt becomes observable after the validation boundary. Previous-hour weather is the only weather signal allowed, and the self-join with cardinality validation avoids many-to-many leakage while preserving missing histories for train-fitted imputation. Calendar features and commuter-window flags address the known start-of-hour information and the user's priority on working-day commuter hours. The regularized linear model provides a scaled low-capacity baseline, while Random Forest, LightGBM, and XGBoost provide CPU nonlinear tree baselines that can capture hour, weather, and commuter interactions; overall RMSE is used for selection as requested. This initial trial uses the full proposed feature set; later trials can use diagnostics to drop weak features or adjust tree parameters if justified. Validation RMSE is an estimate, not independent test performance.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "xgboost_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/bikes/memory/37d75c8462464d4caf0633eb58dace4a/agents/2e5bc664fd2044b8a839487277e823a0/validation_splits.json",
+      "_split_sha256": "dc3b6815afa9a11656004ec751ccc372a270621b118e3a0c06979d307032c523",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 4,
+    "measured": [
+      {
+        "id": "t4.constant_regressor.none.rmse",
+        "trial": 4,
+        "value": 183.5022307321,
+        "description": "constant_regressor/none: validation rmse = 183.502"
+      },
+      {
+        "id": "t4.lightgbm_regressor.none.rmse",
+        "trial": 4,
+        "value": 85.0916553846,
+        "description": "lightgbm_regressor/none: validation rmse = 85.0917"
+      },
+      {
+        "id": "t4.linear_regressor.none.rmse",
+        "trial": 4,
+        "value": 125.4879668762,
+        "description": "linear_regressor/none: validation rmse = 125.488"
+      },
+      {
+        "id": "t4.random_forest_regressor.none.rmse",
+        "trial": 4,
+        "value": 89.3042872756,
+        "description": "random_forest_regressor/none: validation rmse = 89.3043"
+      },
+      {
+        "id": "t4.xgboost_regressor.none.rmse",
+        "trial": 4,
+        "value": 93.552146933,
+        "description": "xgboost_regressor/none: validation rmse = 93.5521"
+      },
+      {
+        "id": "t1.lightgbm_regressor.none.rmse",
+        "trial": 1,
+        "value": 78.5378990998,
+        "description": "lightgbm_regressor/none: validation rmse = 78.5379"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 85.0917; previous best = 78.5379. No measured improvement over the incumbent on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "Would a slower 400-round schedule (learning rate 0.05) with larger leaves and mild subsampling reduce overall RMSE for LightGBM and XGBoost versus the 100-round default?",
+    "alternative": "RMSE may stay flat or worsen, as in the 400-round default test, if the peak under-prediction is not driven by the training schedule.",
+    "next_test": "Run LightGBM (lr 0.05, 400 rounds, 63 leaves, min_child_samples 50, subsample/colsample 0.8, reg_lambda 1) and XGBoost (lr 0.05, 400 rounds, depth 6, subsample/colsample 0.8, reg_lambda 1) on the full reviewed feature set.",
+    "distinguishes": "Compares tuned boosting schedules against the incumbent 100-round defaults on the same frozen folds; it measures whether the schedule changes validation error, not whether the peaks are predictable.",
+    "decision": "continue",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality.",
+    "next_changes": [
+      {
+        "setting": "model_params.lightgbm_regressor.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.min_child_samples",
+        "before": "(estimator default)",
+        "after": 50
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.num_leaves",
+        "before": "(estimator default)",
+        "after": 63
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.reg_lambda",
+        "before": "(estimator default)",
+        "after": 1.0
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.lightgbm_regressor.subsample_freq",
+        "before": "(estimator default)",
+        "after": 1
+      },
+      {
+        "setting": "model_params.linear_regressor",
+        "before": {},
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.random_forest_regressor",
+        "before": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "after": "(estimator default)"
+      },
+      {
+        "setting": "model_params.xgboost_regressor.colsample_bytree",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "model_params.xgboost_regressor.learning_rate",
+        "before": "(estimator default)",
+        "after": 0.05
+      },
+      {
+        "setting": "model_params.xgboost_regressor.max_depth",
+        "before": "(estimator default)",
+        "after": 6
+      },
+      {
+        "setting": "model_params.xgboost_regressor.n_estimators",
+        "before": 100,
+        "after": 400
+      },
+      {
+        "setting": "model_params.xgboost_regressor.reg_lambda",
+        "before": "(estimator default)",
+        "after": 1.0
+      },
+      {
+        "setting": "model_params.xgboost_regressor.subsample",
+        "before": "(estimator default)",
+        "after": 0.8
+      },
+      {
+        "setting": "models",
+        "before": [
+          "linear_regressor",
+          "random_forest_regressor",
+          "lightgbm_regressor",
+          "xgboost_regressor",
+          "constant_regressor"
+        ],
+        "after": [
+          "lightgbm_regressor",
+          "xgboost_regressor",
+          "constant_regressor"
+        ]
+      }
+    ],
+    "next_config": {
+      "insights": [
+        "bikes.csv has 17,379 rows, 731 unique dteday values, and 24 hr values; if one row per hour is expected, 731*24=17,544 implies up to 165 missing hour slots, so a previous-hour self-join will create some NaN weather rows.",
+        "instant is unique and should be treated as a record ID, not a feature; dteday plus hr can form a start-of-hour timestamp, and label_end = timestamp + 1 hour is needed to purge training rows whose cnt is not yet observable.",
+        "casual, registered, and cnt are same-hour outcomes; casual and registered are unavailable at the start of the hour and cnt is the target, so all three must be excluded from features to avoid temporal leakage.",
+        "The current-hour weather columns (weathersit, temp, atemp, hum, windspeed) are realized during the target hour and must not be used directly; only previous-hour weather at timestamp - 1 hour is allowed.",
+        "cnt is right-skewed (mean 189.5, median 142, max 977) and registered dominates casual on average, but this is an observation about the target, not a usable feature because both components are post-outcome.",
+        "Calendar fields (season, yr, mnth, hr, holiday, weekday, workingday) are known at the start of the hour and are plausible drivers of commuter demand; deterministic commuter-window flags for working-day hours 7-9 and 16-19 can make the user's priority explicit.",
+        "holiday is rare (mean 0.0288) and workingday is common (mean 0.6827), so holiday effects may be sparse while working-day commuter patterns are likely important; weather columns are normalized continuous or small-integer fields.",
+        "Hypothesis: a model using calendar features plus previous-hour weather should beat the constant fallback on overall RMSE, with tree models potentially capturing nonlinear hour/weather interactions and the regularized linear model serving as a low-capacity control."
+      ],
+      "questions": [
+        "Should the previous-hour weather join be allowed to cross midnight, so that 00:00 uses the previous day's 23:00 row?",
+        "Do you want a secondary commuter-hour RMSE for working-day hours 7-9 and 16-19 reported alongside overall RMSE, while overall RMSE remains the selection metric?",
+        "Should a prev_weather_missing indicator be added in a later trial to capture missing previous-hour observations after train-fitted imputation?"
+      ],
+      "preparation": "Create timestamp = pd.to_datetime(dteday) + pd.to_timedelta(hr, unit='h') and label_end = timestamp + pd.Timedelta(hours=1). Validate that timestamp is unique; if duplicates exist, investigate before joining. Create prev_timestamp = timestamp - pd.Timedelta(hours=1) and left-join the table to itself on prev_timestamp = timestamp, selecting weathersit, temp, atemp, hum, windspeed as prev_weathersit, prev_temp, prev_atemp, prev_hum, prev_windspeed. Validate cardinality as 1:1 or 1:0 from current row to previous row; keep missing previous-hour weather as NaN for train-fitted imputation. Create deterministic features is_morning_commuter = workingday == 1 and hr in {7,8,9}, and is_evening_commuter = workingday == 1 and hr in {16,17,18,19}. Exclude instant, dteday, timestamp, label_end, prev_timestamp, casual, registered, cnt, and current-hour weather columns (weathersit, temp, atemp, hum, windspeed) from features. Use the explicit feature list below; no target lags and no full-data learned transforms.",
+      "task": "regression",
+      "table": "bikes.csv",
+      "target": "cnt",
+      "features": [
+        "season",
+        "yr",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "prev_weathersit",
+        "prev_temp",
+        "prev_atemp",
+        "prev_hum",
+        "prev_windspeed",
+        "is_morning_commuter",
+        "is_evening_commuter"
+      ],
+      "models": [
+        "lightgbm_regressor",
+        "xgboost_regressor",
+        "constant_regressor"
+      ],
+      "augmentations": [
+        "none"
+      ],
+      "preprocessing": "standard",
+      "split": "temporal",
+      "split_column": "timestamp",
+      "label_end_column": "label_end",
+      "metric": "rmse",
+      "rationale": "The objective is a forward-looking hourly count prediction, so a temporal holdout on timestamp with label_end purging prevents using rows whose cnt becomes observable after the validation boundary. Previous-hour weather is the only weather signal allowed, and the self-join with cardinality validation avoids many-to-many leakage while preserving missing histories for train-fitted imputation. Calendar features and commuter-window flags address the known start-of-hour information and the user's priority on working-day commuter hours. The regularized linear model provides a scaled low-capacity baseline, while Random Forest, LightGBM, and XGBoost provide CPU nonlinear tree baselines that can capture hour, weather, and commuter interactions; overall RMSE is used for selection as requested. This initial trial uses the full proposed feature set; later trials can use diagnostics to drop weak features or adjust tree parameters if justified. Validation RMSE is an estimate, not independent test performance.",
+      "seed": 42,
+      "validation_fraction": 0.2,
+      "device": "cpu",
+      "model_workers": 3,
+      "validation_protocol": "robust",
+      "validation_folds": 3,
+      "model_params": {
+        "linear_regressor": {},
+        "random_forest_regressor": {
+          "n_estimators": 100,
+          "n_jobs": 4
+        },
+        "lightgbm_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.05,
+          "num_leaves": 63,
+          "min_child_samples": 50,
+          "subsample": 0.8,
+          "subsample_freq": 1,
+          "colsample_bytree": 0.8,
+          "reg_lambda": 1.0
+        },
+        "xgboost_regressor": {
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "learning_rate": 0.05,
+          "max_depth": 6,
+          "subsample": 0.8,
+          "colsample_bytree": 0.8,
+          "reg_lambda": 1.0
+        },
+        "constant_regressor": {}
+      },
+      "_split_manifest": "/lustre/fswork/projects/rech/mbm/ual37ci/bench_research_ml_project/split-repos/ml-playground/results/agent_autonomy_20261019/v3/bikes/memory/37d75c8462464d4caf0633eb58dace4a/agents/2e5bc664fd2044b8a839487277e823a0/validation_splits.json",
+      "_split_sha256": "dc3b6815afa9a11656004ec751ccc372a270621b118e3a0c06979d307032c523",
+      "save_predictions": true,
+      "strict_model_params": true,
+      "use_class_weights": true
+    },
+    "next_recipes": []
+  },
+  {
+    "trial": 5,
+    "measured": [
+      {
+        "id": "t5.constant_regressor.none.rmse",
+        "trial": 5,
+        "value": 183.5022307321,
+        "description": "constant_regressor/none: validation rmse = 183.502"
+      },
+      {
+        "id": "t5.lightgbm_regressor.none.rmse",
+        "trial": 5,
+        "value": 78.9086752909,
+        "description": "lightgbm_regressor/none: validation rmse = 78.9087"
+      },
+      {
+        "id": "t5.xgboost_regressor.none.rmse",
+        "trial": 5,
+        "value": 78.3292007811,
+        "description": "xgboost_regressor/none: validation rmse = 78.3292"
+      },
+      {
+        "id": "t5.status",
+        "trial": 5,
+        "value": "completed",
+        "description": "Trial 5 status: completed"
+      },
+      {
+        "id": "t5.xgboost_regressor.none.custom_commuter_hour_rmse",
+        "trial": 5,
+        "value": 139.49607366887665,
+        "description": "xgboost_regressor/none: validation custom_commuter_hour_rmse = 139.496 on 1666 rows"
+      },
+      {
+        "id": "t5.lightgbm_regressor.none.custom_commuter_hour_rmse",
+        "trial": 5,
+        "value": 139.5173206918728,
+        "description": "lightgbm_regressor/none: validation custom_commuter_hour_rmse = 139.517 on 1666 rows"
+      }
+    ],
+    "finding": "This trial's best validation rmse = 78.3292; previous best = 78.5379. The measured selection score improved on this split. This comparison does not identify the cause or establish significance.",
+    "hypothesis": "",
+    "alternative": "The tuned 400-round XGBoost (78.33) and LightGBM (78.91) sit within ~0.4 RMSE of the 100-round LightGBM incumbent (78.54); other hyperparameters, feature sets, distribution shift, and sampling variation remain untested, and commuter-hour RMSE (~139.5) is still far above overall RMSE.",
+    "next_test": "",
+    "distinguishes": "",
+    "decision": "stop",
+    "caution": "Interpretations are untested hypotheses. A negative trial does not establish causality, calibration or optimality."
+  }
+]

@@ -171,3 +171,63 @@ class TestSaveMetrics:
             save_metrics(history, "abc123", "test_exp")
             metrics_path = os.path.join(str(tmp_path), "test_exp", "abc123_metrics.csv")
             assert os.path.exists(metrics_path)
+
+
+@pytest.mark.parametrize("architecture", ["gemma4", "lfm2"])
+def test_attached_classifier_adapter_reload_matches_saved_probabilities(tmp_path, monkeypatch, architecture):
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+    from tokenizers.pre_tokenizers import Whitespace
+    from peft import LoraConfig, TaskType, get_peft_model
+    from transformers import (Gemma4Config, Gemma4ForConditionalGeneration,
+                              Lfm2Config, Lfm2ForCausalLM, PreTrainedTokenizerFast)
+    from ml_pipeline.pipelines_torch.models import HuggingFaceQLoRAWrapper
+    from ml_pipeline.utils import utils
+
+    torch.manual_seed(42)
+    if architecture == "gemma4":
+        config = Gemma4Config(text_config=dict(
+            vocab_size=24, vocab_size_per_layer_input=24,
+            hidden_size=16, hidden_size_per_layer_input=4, intermediate_size=32,
+            num_hidden_layers=1, num_attention_heads=2, num_key_value_heads=1,
+            head_dim=8, global_head_dim=8, layer_types=["full_attention"],
+            rope_parameters={"full_attention": {"rope_type": "default", "rope_theta": 10000.0}},
+        ))
+        base = Gemma4ForConditionalGeneration(config)
+    else:
+        config = Lfm2Config(vocab_size=24, hidden_size=16, intermediate_size=32,
+                           num_hidden_layers=1, num_attention_heads=2, num_key_value_heads=1,
+                           block_auto_adjust_ff_dim=False, full_attn_idxs=[0])
+        base = Lfm2ForCausalLM(config)
+    base_dir = tmp_path / "base"
+    base.save_pretrained(base_dir)
+    base.config._name_or_path = str(base_dir)
+    base.name_or_path = str(base_dir)
+    attached = HuggingFaceQLoRAWrapper._attach_sequence_classification_head(
+        base, 16, 0.02, 2, "classification", torch.float32,
+    )
+    model = get_peft_model(attached, LoraConfig(
+        task_type=TaskType.SEQ_CLS, r=2, lora_alpha=2,
+        target_modules=["q_proj", "v_proj"], modules_to_save=["score"],
+    ))
+    with torch.no_grad():
+        for parameter in model.parameters():
+            if parameter.requires_grad:
+                parameter.add_(0.01)
+    tokenizer = Tokenizer(WordLevel({"[PAD]": 0, "[UNK]": 1, "human": 2, "text": 3, "generated": 4}, unk_token="[UNK]"))
+    tokenizer.pre_tokenizer = Whitespace()
+    wrapper = HuggingFaceQLoRAWrapper.__new__(HuggingFaceQLoRAWrapper)
+    torch.nn.Module.__init__(wrapper)
+    wrapper.model = model
+    wrapper.tokenizer = PreTrainedTokenizerFast(tokenizer_object=tokenizer, pad_token="[PAD]", unk_token="[UNK]",
+                                               padding_side="left", model_input_names=["input_ids", "attention_mask"])
+    wrapper.task_type, wrapper.device, wrapper.max_seq_length = "classification", "cpu", 16
+    wrapper._needs_token_type_ids = False
+    expected = wrapper.predict_proba(["human text", "generated"], batch_size=2)
+    directory = tmp_path / "run" / "adapter"
+    wrapper.save_pretrained(str(directory))
+    monkeypatch.setattr(utils, "RESULTS_DIR_OUT", str(tmp_path))
+    utils._write_index_entry("run", {"checkpoint_id": "adapter", "artifact_type": "hf_dir", "artifact_path": "adapter"})
+    loaded = load_model(lambda **kwargs: None, {}, "run", "adapter")
+    np.testing.assert_allclose(loaded.predict_proba(["human text", "generated"], batch_size=2), expected,
+                               rtol=1e-5, atol=1e-6)

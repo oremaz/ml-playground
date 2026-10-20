@@ -1,0 +1,205 @@
+{
+  "domain": "activity",
+  "native_calls_answered": 13,
+  "single_simulated_approval": true,
+  "trials": 5,
+  "notes": 5,
+  "no_final_feedback_to_llm": true,
+  "features": 561,
+  "train_rows": 6458,
+  "validation_rows": 1766,
+  "final_rows": 2075,
+  "selection_metric": "f1_macro",
+  "metric_definitions": [
+    {
+      "class_label": "SITTING",
+      "kind": "class_recall",
+      "name": "custom_sitting_recall"
+    },
+    {
+      "class_label": "STANDING",
+      "kind": "class_recall",
+      "name": "custom_standing_recall"
+    }
+  ],
+  "validation_baseline": 0.950545416,
+  "validation_selected": 0.9523031751,
+  "final_baseline_vs_selected": {
+    "baseline": {
+      "trial": 1,
+      "model": "lightgbm_classifier",
+      "scores": {
+        "accuracy": 0.8583132530120482,
+        "f1_macro": 0.8606687104579493,
+        "roc_auc": 0.9729038570137045
+      },
+      "diagnostic_metrics": [
+        {
+          "name": "custom_sitting_recall",
+          "kind": "class_recall",
+          "rows": 2075,
+          "value": 0.6837837837837838,
+          "class_rows": 370
+        },
+        {
+          "name": "custom_standing_recall",
+          "kind": "class_recall",
+          "rows": 2075,
+          "value": 0.8118556701030928,
+          "class_rows": 388
+        }
+      ]
+    },
+    "selected": {
+      "trial": 2,
+      "model": "lightgbm_classifier",
+      "scores": {
+        "accuracy": 0.8587951807228915,
+        "f1_macro": 0.8617463732892808,
+        "roc_auc": 0.9766575278434088
+      },
+      "diagnostic_metrics": [
+        {
+          "name": "custom_sitting_recall",
+          "kind": "class_recall",
+          "rows": 2075,
+          "value": 0.6864864864864865,
+          "class_rows": 370
+        },
+        {
+          "name": "custom_standing_recall",
+          "kind": "class_recall",
+          "rows": 2075,
+          "value": 0.8092783505154639,
+          "class_rows": 388
+        }
+      ]
+    }
+  },
+  "fitted_replays": [
+    {
+      "trial": 1,
+      "model": "random_forest_classifier",
+      "scores": {
+        "accuracy": 0.9252548131370328,
+        "f1_macro": 0.9257240206177876,
+        "roc_auc": 0.9970281448132652
+      }
+    },
+    {
+      "trial": 1,
+      "model": "lightgbm_classifier",
+      "scores": {
+        "accuracy": 0.9501698754246886,
+        "f1_macro": 0.9505454159518271,
+        "roc_auc": 0.9972731188659525
+      }
+    },
+    {
+      "trial": 1,
+      "model": "xgboost_classifier",
+      "scores": {
+        "accuracy": 0.9450736126840317,
+        "f1_macro": 0.9453303930357547,
+        "roc_auc": 0.9973743456465313
+      }
+    },
+    {
+      "trial": 2,
+      "model": "lightgbm_classifier",
+      "scores": {
+        "accuracy": 0.9518686296715742,
+        "f1_macro": 0.9523031751355987,
+        "roc_auc": 0.9975269787985167
+      }
+    },
+    {
+      "trial": 3,
+      "model": "lightgbm_classifier",
+      "scores": {
+        "accuracy": 0.8912797281993206,
+        "f1_macro": 0.8915661911892495,
+        "roc_auc": 0.9895085683956005
+      }
+    },
+    {
+      "trial": 4,
+      "model": "xgboost_classifier",
+      "scores": {
+        "accuracy": 0.9473386183465459,
+        "f1_macro": 0.9475425460409198,
+        "roc_auc": 0.9974846997641197
+      }
+    },
+    {
+      "trial": 5,
+      "model": "lightgbm_classifier",
+      "scores": {
+        "accuracy": 0.9513023782559457,
+        "f1_macro": 0.9515899345314152,
+        "roc_auc": 0.9977728382086287
+      }
+    }
+  ],
+  "interpretation": "Descriptive, adaptively selected validation comparison and a single reserved partition; no significance claim.",
+  "training_prior_reference": {
+    "validation": {
+      "name": "training_prior",
+      "prediction": 0,
+      "scores": {
+        "accuracy": 0.1812004530011325,
+        "f1_macro": 0.05113454777884308,
+        "roc_auc": 0.5
+      },
+      "scope": "Constant reference estimated only from this fold's original training labels; no tuning."
+    },
+    "final": {
+      "name": "training_prior",
+      "prediction": 0,
+      "scores": {
+        "accuracy": 0.19036144578313252,
+        "f1_macro": 0.053306342780026994,
+        "roc_auc": 0.5
+      },
+      "scope": "Constant reference estimated only from this fold's original training labels; no tuning."
+    }
+  },
+  "subjects": {
+    "training": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      12,
+      13,
+      15,
+      17,
+      19,
+      20,
+      22,
+      25,
+      26,
+      27,
+      29,
+      30
+    ],
+    "validation": [
+      1,
+      11,
+      14,
+      21,
+      23
+    ],
+    "final": [
+      9,
+      10,
+      16,
+      18,
+      24,
+      28
+    ]
+  }
+}
