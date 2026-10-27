@@ -1,5 +1,8 @@
 # Forecasting: foundation-model integration
 
+This is a retained study with its own recorded protocol and source version.
+See the [experiment index](../README.md) for how it relates to the latest runs.
+
 Forecast the S&P 500 index five observed trading dates ahead from 128 past values.
 All methods used the same three rolling validation origins and frozen checkpoint
 revisions. Earlier observed validation values can enter later contexts; each

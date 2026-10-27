@@ -1,5 +1,8 @@
 # Finance: rare-drop ranking
 
+This is a retained study with its own recorded protocol and source version.
+See the [experiment index](../README.md) for how it relates to the latest runs.
+
 Predict whether an S&P 500 stock falls at least 5% over the next five observed
 trading dates, at Friday's close. Data comes from the public
 [S&P 500 snapshot](https://www.kaggle.com/datasets/andrewmvd/sp-500-stocks).

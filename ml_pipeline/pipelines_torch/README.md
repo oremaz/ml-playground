@@ -1,186 +1,134 @@
-# Model Pipelines & Registry (`pipelines_torch`)
+# Model pipelines and registries
 
-Training, evaluation and benchmarking pipelines for tabular, text and vision models, with shared registries, augmentation utilities, semi-supervised training and checkpoint support.
+This package connects models to fitting, evaluation, augmentation and checkpoint
+storage. Start here for the library API. The [project README](../../README.md)
+describes the CSV assistant, whose frozen development folds and reserved final
+partition are managed by a separate experiment runtime.
 
----
+## Choose a training route
 
-## Features
+| Route | Use it for | Main contract |
+|---|---|---|
+| [skore comparison](../../docs/skore.md) | New ordinary sklearn model comparisons | Delegates CV, metrics, inspection and cached reports to skore |
+| `GeneralPipelineSklearn` | Classical estimators | Fits arrays, optionally runs CV, exposes validation metrics and fitted model |
+| `GeneralPipeline` | PyTorch modules | Owns loaders, optimizer, epochs, mixed precision and training restart state |
+| `HuggingFaceQLoRAWrapper.fit` | LoRA/QLoRA text classifiers and regressors | Uses Hugging Face Trainer and native Trainer checkpoints |
+| `BenchmarkRunner` | Registered model/augmentation comparisons | Fits combinations and writes model/metric artifacts |
+| [playground runtime](../playground_runtime.py) | Reviewed tabular experiments | Owns preprocessing and configured holdout/group/temporal splits |
+| [forecasting runtime](../forecasting_runtime.py) | Univariate forecasts | Uses shared past-only contexts, origins and horizons |
 
-### 🏗️ Unified Model Pipelines
-- **GeneralPipeline**: PyTorch-based pipeline for classification/regression, k-fold CV, augmentation, metrics, and model saving/loading.
-- **GeneralPipelineSklearn**: Sklearn-compatible pipeline for classical models, with augmentation and CV support.
-- **BenchmarkRunner**: Automated grid search over models, augmentations, and metrics; result aggregation and CSV export.
+The pipeline convenience CV uses shuffled stratified folds for classification
+and shuffled folds for regression. It is not a group or chronological split.
+Classical CV finishes with a fit on all supplied training rows; Torch CV averages
+fold weights. The CSV assistant has its own selection protocol and does not use
+these behaviors as its final-evaluation policy.
 
-### 🧩 Model Registry
-- **Plug-and-play models**: Register and instantiate models by name (`MODEL_REGISTRY`).
-- **Vision models**: Lightweight CNNs, transfer-learning backbones, and timm-based vision models.
-- **Tabular models**: Classic ML baselines and transformer-style MLPs.
+## A complete CPU example
 
-### 🧪 Semi-Supervised Learning Utilities
-- **Vision SSL** (`ss_vision_models.py`): Implements Pseudo-Label, Pi-Model, Mean Teacher, and CDMAD debiasing while keeping hooks compatible with official repositories.
-- **Tabular SSL** (`ss_models.py`): Wraps any registry model with the same reusable SSL algorithms (pseudo-labeling or Mean Teacher) plus optional tabular-specific augmentations.
-
-
-### 🔄 Cross-Validation & Ensembling
-- **K-fold CV**: Built-in support for k-fold cross-validation with optional weight averaging.
-- **Metrics tracking**: Track and aggregate metrics (F1, R², etc.) across folds.
-- **Early stopping**: Optional early stopping based on validation loss or a selected metric.
-
-### 💾 Model Persistence
-- **Save/load**: Save model weights and training history locally or to HuggingFace Hub.
-- **Reproducibility**: Deterministic splits, seed control, and experiment tracking.
-
----
-
-## Directory Structure
-
-```
-pipelines_torch/
-├── __init__.py
-├── base.py             # GeneralPipeline, GeneralPipelineSklearn
-├── benchmark.py        # BenchmarkRunner (grid search, result aggregation)
-├── models.py           # Model registry, wrappers, and third-party adapters for tabular/text
-├── vision_models.py    # Vision model registry (CNNs, CLIP, FatFormer, DiffusionFake, etc.)
-├── ss_models.py        # Tabular semi-supervised wrappers
-├── ss_vision_models.py # Vision semi-supervised algorithms & hooks
-├── ssl_algorithms.py   # Shared implementations of pseudo-label, Pi-Model, and Mean Teacher
-└── ...
-```
-
----
-
-## Model Registry Overview
-
-Models are registered under descriptive keys. The following tables highlight the most commonly used entries (see source files for the exhaustive list).
-
-### Classification Models (`models.py`)
-- `mlp_classifier`, `deep_mlp_classifier`: PyTorch MLPs (configurable depth, batchnorm, dropout)
-- `constant_classifier`, `linear_classifier`: training-prior and regularized logistic controls
-- `random_forest_classifier`, `xgboost_classifier`, `lightgbm_classifier`, `catboost_classifier`: Classical baselines
-- `stacking_classifier`: LightGBM + XGBoost + logistic stack with a logistic meta-learner
-- `tabicl_classifier`: TabICLv2 tabular foundation model (sklearn-compatible, `pip install tabicl`, loads the `tabicl-classifier-v2-*` checkpoint by default)
-- `tabfm_classifier`: Google TabFM zero-shot foundation model, PyTorch backend (in-context learning; installed from the pinned official repository release by the root requirements)
-- `hf_lora_classifier`, `hf_qlora_classifier`, `llama_cpp_classifier`: Text-oriented adapters
-
-### Regression Models (`models.py`)
-- `mlp_regressor`, `deep_mlp_regressor`: PyTorch MLPs
-- `constant_regressor`, `linear_regressor`: training-mean and Ridge controls
-- `random_forest_regressor`, `xgboost_regressor`, `lightgbm_regressor`, `catboost_regressor`
-- `stacking_regressor`: Per-target LightGBM + XGBoost + ridge stack with a RidgeCV meta-learner
-- `tabicl_regressor`: TabICLv2 tabular foundation model for regression (quantile-based predictions)
-- `tabfm_regressor`: Google TabFM zero-shot foundation model for regression
-- `hf_lora_regressor`, `hf_qlora_regressor`, `llama_cpp_regressor`
-
-### Forecasting models (`FORECASTING_MODEL_REGISTRY`)
-
-The separate zero-shot forecasting family includes `timestral_209m`,
-`toto_2_0_4m`, `toto_2_0_22m`, `toto_2_0_313m`, `toto_2_0_1b`,
-`toto_2_0_2_5b`, `timesfm_3_0`, `chronos_2`, `naive_forecaster`, and
-`seasonal_naive_forecaster`. These names also appear in the combined registry.
-Adapters implement `forecast(contexts, horizon)`, returning median forecasts and,
-for foundation models, common quantiles. They load optional dependencies and
-weights lazily. They do not implement tabular classification or `predict_proba`.
-
-Use `ml_pipeline.playground_runtime.benchmark` with `task="forecasting"` and
-time/series/horizon configuration, or `forecasting_runtime.benchmark_forecasting`
-directly. The existing `BenchmarkRunner(X, y)` training workflow remains for
-classification/regression. The forecasting runtime shares origins across methods,
-uses only past history per entity, and saves predictions, revisions and errors.
-See the [project README](../../README.md#models-and-evaluation) for installation
-and supported model families, and [adapter metadata](../forecasting_models.py)
-for checkpoint and license information.
-
-### Vision Models (`vision_models.py`)
-- `simple_cnn`, `adaptive_cnn`, `residual_cnn`: Lightweight CNN baselines
-- `resnet50`: Transfer learning backbone
-- `clip_classifier`, `dinov3_classifier`, `qwen2_vl_qlora`: Multimodal and large-model adapters
-- `timm_dinov2_vit_small`, `timm_dinov2_vit_base`, `timm_dinov2_vit_large`: DINOv2 self-supervised ViT backbones (via timm)
-- `timm_convnextv2_tiny`, `timm_efficientnetv2_s`, `timm_vit_base_patch16`, `timm_vit_mae_base`: Other timm backbones
-
-Use `get_model("model_name", ...)` to instantiate any vision model; tabular/text models are accessed via `MODEL_REGISTRY`.
-
----
-
-## Semi-Supervised Modules
-
-### Vision (`ss_vision_models.py`)
-Provides loss wrappers that can sit on top of any vision backbone:
-- `PseudoLabel`, `PiModel`, `MeanTeacher`: Classical SSL baselines implemented once in `ssl_algorithms.py` and reused across vision and tabular pipelines.
-- Hooks return `(supervised_loss, unsupervised_loss, logs)` so you can integrate them into existing training loops.
-
-### Tabular (`ss_models.py`)
-- `SemiSupervisedTabular`: Wraps any registry model, reusing the shared pseudo-label or Mean Teacher implementations with optional Gaussian-noise augmentation hooks.
-- Designed to operate with the augmentation utilities in `augmentations.py` for minority-class oversampling or consistency regularization.
-
----
-
-## Usage Examples
-
-### 1. Select and Instantiate a Model
+This fits a classical model with three development folds, then evaluates once on
+an explicit reserved test partition. No downloads, API calls or file writes are
+needed. Run Python from the repository root with `PYTHONPATH=.`:
 
 ```python
-# Tabular/text models
-from ml_pipeline.pipelines_torch.models import MODEL_REGISTRY
-model = MODEL_REGISTRY['tabr_classifier'](input_dim=..., num_classes=..., init_kwargs={'k': 32})
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from ml_pipeline.pipelines_torch.base import GeneralPipelineSklearn
 
-# Vision models
-from ml_pipeline.pipelines_torch.vision_models import get_model
-vision_model = get_model('resnet50', num_classes=2)
-```
-
-### 2. Build a Pipeline
-
-```python
-from ml_pipeline.pipelines_torch.base import GeneralPipeline
-pipeline = GeneralPipeline(
-    model=model,
-    loss_fn='CrossEntropyLoss',
-    optimizer_cls=torch.optim.Adam,
-    optimizer_params={'lr': 1e-3},
-    augmentations=None,
-    metrics=[...],
-    task_type='classification',
+X, y = make_classification(n_samples=200, n_features=8, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42,
 )
+pipeline = GeneralPipelineSklearn(
+    LogisticRegression(max_iter=1000), metrics=[accuracy_score],
+    use_kfold=True, k_folds=3, random_state=42,
+)
+history = pipeline.fit(X_train, y_train)
+print(pipeline.evaluate(X_test, y_test))
 ```
 
-### 3. Train with Semi-Supervised Helpers
+Preprocessing is outside this minimal example. Fit learned transformations on
+training rows within each fold, as the playground runtime does. Augmentation
+also belongs only to the training portion; see the [augmentation guide](../data_augmentation/README.md).
 
-```python
-from ml_pipeline.pipelines_torch.ss_models import SemiSupervisedTabular
-ssl_wrapper = SemiSupervisedTabular(model, num_classes=2, use_mean_teacher=True)
-loss, logs = ssl_wrapper.step((xb_l, yb_l), (xb_u, yb_u), epoch)
-```
+## Registry models and saved comparisons
 
-### 4. Benchmark Multiple Models/Augmentations
+[models.py](models.py) exposes `CLASSIFICATION_MODEL_REGISTRY`,
+`REGRESSION_MODEL_REGISTRY` and their combined `MODEL_REGISTRY`. Common names:
+
+| Family | Classification / regression keys |
+|---|---|
+| Simple controls | `constant_classifier`, `linear_classifier` / `constant_regressor`, `linear_regressor` |
+| MLP | `mlp_classifier`, `deep_mlp_classifier` / `mlp_regressor`, `deep_mlp_regressor` |
+| Tree models | `random_forest_*`, `xgboost_*`, `lightgbm_*`, `catboost_*` with `classifier` or `regressor` suffix |
+| Stacking | `stacking_classifier` / `stacking_regressor` |
+| NVIDIA Kumo | `kumo_classifier` / `kumo_regressor`; `size` selects small, medium or large |
+| Tabular foundation models | `tabicl_classifier`, `tabfm_classifier` / `tabicl_regressor`, `tabfm_regressor` |
+| Text adapters | `hf_qlora_classifier`, `llama_cpp_classifier` / `hf_qlora_regressor`, `llama_cpp_regressor` |
+
+For a new classical comparison, prefer the short [skrub/skore path](../../docs/skore.md).
+The legacy runner below remains useful for reproducing existing artifacts and
+using its native training/restart features.
+
+Registry values are constructors; instantiate them with model-specific arguments.
+Optional backends need their packages and weights. Vision models have their own
+[registry and get_model helper](vision_models.py), including simple CNNs,
+ResNet, CLIP, DINO and timm backbones. Forecasting models implement
+`forecast(contexts, horizon)`, rather than a tabular `predict_proba` interface;
+see [the adapter metadata](../forecasting_models.py) for registered names,
+checkpoint revisions, quantiles and licenses.
+
+Using the same `X_train` and `y_train` as above, this comparison writes artifacts
+under `results/pipeline_example/` (or `ML_PIPELINE_RESULTS_DIR/pipeline_example/`):
 
 ```python
 from ml_pipeline.pipelines_torch.benchmark import BenchmarkRunner
+from ml_pipeline.pipelines_torch.models import MODEL_REGISTRY
+
 runner = BenchmarkRunner(
-    model_configs=[...],
-    augmentations=[MGS_GRF_Augmentor()],
-    metrics=[...],
+    model_configs=[{
+        "name": "linear_classifier",
+        "class": MODEL_REGISTRY["linear_classifier"],
+        "params": {},
+    }],
+    augmentations=[None], metrics=[accuracy_score],
+    use_kfold=True, k_folds=3, path_start="pipeline_example", random_state=42,
 )
-results_df = runner.run(X, y)
+runner.run(X_train, y_train)
 ```
 
----
+`run()` writes the checkpoint index and metric files; it does not return a
+DataFrame. Choose a run directory deliberately: an existing completed checkpoint
+can be reused rather than fitted again. The saved registry is managed by
+[utils.py](../utils/utils.py); restart state has a separate role described below.
 
-## Extending the Registry
+## Read or extend the implementation
 
-1. Implement your model or wrapper in `models.py` or `vision_models.py`.
-2. Register it in `MODEL_REGISTRY` with a unique key.
-3. Use it in pipelines, SSL wrappers, or benchmarks by name.
+| File | Responsibility |
+|---|---|
+| [evaluation.py](evaluation.py) | Prediction routes, scoring helpers and shared CV summaries |
+| [sklearn_pipeline.py](sklearn_pipeline.py) | Classical fitting, CV and completed-fold recovery |
+| [base.py](base.py) | PyTorch training; stable public pipeline imports |
+| [tabular_models.py](tabular_models.py) | sklearn adapters and configurable MLPs |
+| [hf_models.py](hf_models.py), [hf_training.py](hf_training.py) | Text model construction/inference and Trainer fitting |
+| [llama_models.py](llama_models.py) | Frozen llama.cpp feature adapter |
+| [benchmark.py](benchmark.py) | Model/augmentation combinations and artifact registration |
+| [ssl_algorithms.py](ssl_algorithms.py) | Shared PseudoLabel, PiModel and MeanTeacher losses |
 
----
+Add an adapter in its corresponding model module, expose it through the
+appropriate registry, then check fitting, score shapes, class ordering and saved
+model reloads. Public imports from `base.py` and `models.py`, including the shorter
+historical `pipelines_torch` paths, remain available for existing code and pickles.
 
-## Best Practices
+Semi-supervised vision classes are exposed by [ss_vision_models.py](ss_vision_models.py).
+Their `ssl_loss` returns supervised loss, unsupervised loss and logs.
+[ss_models.py](ss_models.py) supplies `SemiSupervisedTabular.step`, which combines
+the two losses and returns `(total_loss, logs)`; call `post_step()` after the
+optimizer step when using MeanTeacher. Labeled and unlabeled batches have
+explicit roles; these are separate helpers, not an automatic choice by the CSV agent.
 
-- Use k-fold CV for robust evaluation and track metrics consistently.
-- Register all new models and augmentations to keep experiments reproducible.
-- Integrate with semi-supervised utilities when working with partially labeled datasets.
-- Save models, logs, and augmentation parameters for later audits.
-
-### Resuming interrupted training
+## Resuming interrupted training
 
 `BenchmarkRunner` assigns a separate restart directory to each model and
 augmentation configuration under `results/<run>/.restart/`. Torch fitting saves
@@ -211,3 +159,18 @@ training, including Gemma 4, Nanbeige and LFM. Explicit CPU reload requests are
 honored even when CUDA is available. Attached heads declare mean-loss gradient
 accumulation semantics, consume Trainer-only keyword arguments and disable
 unused decoding caches.
+
+## Validation
+
+Run the relevant checks from the repository root:
+
+```bash
+PYTHONPATH=. uv run python -m pytest ml_pipeline/tests/test_compute_score.py \
+  ml_pipeline/tests/test_training_restart.py \
+  ml_pipeline/tests/test_model_import_compatibility.py -q
+```
+
+PEFT-specific tests require the text dependencies. See the
+[validation record](../../docs/cleanup_validation.md) for the environments and
+checks actually run in this checkout. CPU fixtures do not establish real-model
+GPU accuracy or compatibility with every optional backend.

@@ -1,10 +1,6 @@
 """Tabular augmentation utilities with official research integrations."""
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
-import numpy as np
-
 from typing import Tuple, Optional, Callable, Dict
 import numpy as np
 
@@ -193,27 +189,3 @@ AUGMENTATION_REGISTRY: Dict[str, Callable] = {
     "smoteenn": smoteenn_augmentation,
     "smotetomek": smotetomek_augmentation,
 }
-
-# --- Documentation ---
-"""
-AUGMENTATION_REGISTRY keys:
-- 'smote', 'borderline_smote', 'svm_smote', 'kmeans_smote', 'adasyn', 'random_oversampler', 'smoteenn', 'smotetomek', 'mixup', 'mixup_smote', 'smote_gaussian', 'none'
-- All SMOTE variants and hybrid samplers are for classification only.
-- Mixup and none can be used for regression or classification.
-- All oversampling methods (except mixup and none) automatically apply TomekLinks cleaning after generation.
-
-AUTOMATIC CLEANING:
-- TomekLinks cleaning is automatically applied after all oversampling operations
-- This removes borderline samples and improves sample quality
-- No need for manual composition - cleaning is built-in
-
-max_factor parameter:
-- Most augmentation functions now accept a 'max_factor' parameter (default=2.0)
-- max_factor = majority_count / final_minority_count
-- max_factor=1.0: Complete balancing (minority class becomes equal to majority class)
-- max_factor=2.0: Minority class reaches 50% of majority class size 
-- max_factor=4.0: Minority class reaches 25% of majority class size
-- Supported by: smote, borderline_smote, svm_smote, kmeans_smote, adasyn, 
-  smoteenn, smotetomek, mixup_smote
-- Not applicable to: mixup, none
-"""

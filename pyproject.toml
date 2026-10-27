@@ -21,6 +21,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+evaluation = [
+    "skrub==0.10.0",
+    "skore==0.28.0",
+]
+kumo = [
+    "structured-data-models==0.2.1",
+    "pyarrow==21.0.0",
+]
 forecasting = [
     "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
     "timesfm[torch]==3.0.2",
@@ -50,8 +58,9 @@ tabular = [
     "catboost==1.2.10",
     "imbalanced-learn==0.14.1",
     "skrub==0.10.0",
-    "tabicl==2.0.3",
-    "tabpfn",
+    "skore==0.28.0",
+    "tabicl==2.2.0",
+    "tabpfn==9.2.0",
     "tabfm[pytorch] @ git+https://github.com/google-research/tabfm.git@d8678b6895f1428a468d4cc299c1ff4cf704e726",
 ]
 research = [
@@ -73,8 +82,9 @@ research = [
     "catboost==1.2.10",
     "imbalanced-learn==0.14.1",
     "skrub==0.10.0",
-    "tabicl==2.0.3",
-    "tabpfn",
+    "skore==0.28.0",
+    "tabicl==2.2.0",
+    "tabpfn==9.2.0",
     "tabfm[pytorch] @ git+https://github.com/google-research/tabfm.git@d8678b6895f1428a468d4cc299c1ff4cf704e726",
     "wandb==0.28.1",
     "streamlit==1.52.2",

@@ -20,3 +20,19 @@ See the [results and protocol](autonomous/README.md) and the
 gains are mixed, and the review identifies mistakes even where execution checks
 passed. These single-seed retrospective runs do not establish general agent
 superiority or consistent gains from larger trial budgets.
+
+## Which record answers which question?
+
+| Record | Question and status |
+|---|---|
+| [autonomous](autonomous/README.md) | Latest four-task agent evaluation with three frozen development folds |
+| [cross_domain](cross_domain/README.md) | Earlier energy, bikes and activity development study; includes operator-assisted recovery |
+| [finance](finance/README.md) | Earlier three-trial finance comparison on one development split |
+| [reasoning](reasoning/README.md) | Explanation replay using existing measurements; no new predictor fitting |
+| [forecasting](forecasting/README.md) | Separate forecasting-adapter integration check on one short retrospective series |
+
+These records use different protocols and source versions. Their numbers are not
+interchangeable replications or a matched-budget ranking. Start with the latest
+record, then follow the historical studies for the changes that motivated it.
+Recorded source hashes, dependency receipts and local fitted artifacts are needed
+for exact replay; rerunning today's defaults creates a new experiment.

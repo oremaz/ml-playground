@@ -3,6 +3,14 @@ import torch.nn as nn
 from typing import Dict, Type, Optional, Callable
 
 import timm
+from functools import partial
+
+
+DINOV3_REVISIONS = {
+    "facebook/dinov3-vits16-pretrain-lvd1689m": "114c1379950215c8b35dfcd4e90a5c251dde0d32",
+    "facebook/dinov3-vitb16-pretrain-lvd1689m": "5931719e67bbdb9737e363e781fb0c67687896bc",
+    "facebook/dinov3-vitl16-pretrain-lvd1689m": "ea8dc2863c51be0a264bab82070e3e8836b02d51",
+}
 
 class SimpleCNN(nn.Module):
     """A very small CNN for quick experiments on vision datasets."""
@@ -260,6 +268,7 @@ class DINOv3Classifier(nn.Module):
         model_name: str = "facebook/dinov3-vitl16-pretrain-lvd1689m",
         input_size: int = 518,
         freeze_backbone: bool = True,
+        revision: Optional[str] = None,
     ):
         super().__init__()
         try:
@@ -270,7 +279,8 @@ class DINOv3Classifier(nn.Module):
             )
 
         self.input_size = input_size
-        self.backbone = AutoModel.from_pretrained(model_name)
+        revision = revision or DINOV3_REVISIONS.get(model_name)
+        self.backbone = AutoModel.from_pretrained(model_name, revision=revision)
 
         if freeze_backbone:
             for param in self.backbone.parameters():
@@ -294,23 +304,30 @@ class DINOv3Classifier(nn.Module):
 
 
 class Qwen2VLQLoRA(nn.Module):
-    """QLoRA fine-tuning wrapper for the Qwen 2.5 Vision-Language model."""
+    """Qwen vision-language QLoRA adapter, retaining its historical class name."""
 
     def __init__(
         self,
-        model_name: str = "Qwen/Qwen2.5-VL-2B-Instruct",
+        model_name: str = "Qwen/Qwen3.5-2B",
         num_classes: int = 2,
         lora_r: int = 16,
         lora_alpha: int = 32,
         lora_dropout: float = 0.05,
+        revision: Optional[str] = None,
+        format_prompts: Optional[bool] = None,
     ):
         super().__init__()
-        from transformers import AutoProcessor, AutoModelForCausalLM, BitsAndBytesConfig
+        from transformers import AutoProcessor, AutoModelForMultimodalLM, BitsAndBytesConfig
         from peft import LoraConfig, get_peft_model
 
         import torch as _torch
 
-        self.processor = AutoProcessor.from_pretrained(model_name)
+        if revision is None and model_name == "Qwen/Qwen3.5-2B":
+            revision = "15852e8c16360a2fea060d615a32b45270f8a8fc"
+        self.processor = AutoProcessor.from_pretrained(model_name, revision=revision)
+        self.format_prompts = model_name == "Qwen/Qwen3.5-2B" if format_prompts is None else format_prompts
+        if self.format_prompts:
+            self.processor.tokenizer.padding_side = "left"
 
         quant_cfg = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -319,8 +336,9 @@ class Qwen2VLQLoRA(nn.Module):
             bnb_4bit_compute_dtype=_torch.bfloat16 if _torch.cuda.is_available() else _torch.float16,
         )
 
-        self.model = AutoModelForCausalLM.from_pretrained(
+        self.model = AutoModelForMultimodalLM.from_pretrained(
             model_name,
+            revision=revision,
             quantization_config=quant_cfg,
             device_map="auto",
         )
@@ -336,7 +354,23 @@ class Qwen2VLQLoRA(nn.Module):
         self.num_classes = num_classes
 
     def forward(self, images, prompts):
-        inputs = self.processor(images=images, text=prompts, return_tensors="pt").to(self.model.device)
+        if getattr(self, "format_prompts", False):
+            prompts = [prompts] if isinstance(prompts, str) else list(prompts)
+            if getattr(images, "ndim", None) == 3 or not hasattr(images, "__iter__"):
+                images = [images]
+            image_rows = list(images)
+            if len(image_rows) != len(prompts):
+                raise ValueError("Provide one prompt for each image")
+            conversations = [[{"role": "user", "content": [
+                {"type": "image", "image": image}, {"type": "text", "text": prompt},
+            ]}] for image, prompt in zip(image_rows, prompts)]
+            inputs = self.processor.apply_chat_template(
+                conversations, add_generation_prompt=True, tokenize=True, return_dict=True,
+                return_tensors="pt", padding=True, enable_thinking=False,
+            )
+        else:
+            inputs = self.processor(images=images, text=prompts, return_tensors="pt")
+        inputs = inputs.to(self.model.device)
         output = self.model(**inputs)
         return output.logits[:, -1, : self.num_classes]
 
@@ -450,6 +484,12 @@ MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {
     ),
     "clip_classifier": CLIPClassifier,
     "dinov3_classifier": DINOv3Classifier,
+    "dinov3_small_classifier": partial(
+        DINOv3Classifier, model_name="facebook/dinov3-vits16-pretrain-lvd1689m", input_size=512,
+    ),
+    "dinov3_base_classifier": partial(
+        DINOv3Classifier, model_name="facebook/dinov3-vitb16-pretrain-lvd1689m", input_size=512,
+    ),
     "qwen2_vl_qlora": Qwen2VLQLoRA,
     # Modern timm-based backbones for vision benchmarks
     "timm_convnextv2_tiny": _register_timm_model(

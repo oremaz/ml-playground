@@ -85,6 +85,7 @@ def method_catalog():
         "stacking": "Stacking ensemble with internal model cross-validation; more expensive.",
         "tabicl": "TabICLv2 pretrained tabular model; requires tabicl and downloaded weights.",
         "tabfm": "Google TabFM pretrained tabular model; requires tabfm and downloaded weights.",
+        "kumo": "NVIDIA Kumo Tabular; small (28M), medium (62M) or large (215M) via size. Requires the kumo extra, Torch 2.7+ and weights; regression predicts the median.",
         "hf_qlora": "Text QLoRA wrapper; use the manual workflow for tokenized text, not this tabular runtime.",
         "llama_cpp": "GGUF text wrapper; use the manual workflow, requires a local model file.",
     }

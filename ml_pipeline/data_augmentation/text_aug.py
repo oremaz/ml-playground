@@ -5,13 +5,14 @@ import numpy as np
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import re
 
 # ---------------------------------------------------------------------------
 # Default models per backend (one path per provider)
 # ---------------------------------------------------------------------------
 
-DEFAULT_GEMINI_MODEL     = "gemini-3.1-flash-lite-preview"
-DEFAULT_OPENROUTER_MODEL = "qwen/qwen3.6-plus:free"
+DEFAULT_GEMINI_MODEL     = "gemini-3.5-flash-lite"
+DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 DEFAULT_LOCAL_MODEL      = "Qwen/Qwen3.5-9B"
 
 # ---------------------------------------------------------------------------
@@ -25,14 +26,14 @@ class TextAugmentationConfig:
     backend
     -------
     "gemini"
-        Google Gemini 3.1 via google-genai.
+        Google Gemini Flash-Lite via google-genai.
         Requires: GOOGLE_API_KEY env var (or api_key argument).
-        Default model: gemini-3.1-flash-lite-preview
+        Default model: gemini-3.5-flash-lite
 
     "openrouter"
         Any model served by OpenRouter (OpenAI-compatible API).
         Requires: OPENROUTER_API_KEY env var (or api_key argument).
-        Default model: qwen/qwen3.6-plus:free
+        Default model: openrouter/free (router; model size can vary).
 
     "local"
         HuggingFace model loaded locally in INT4 via bitsandbytes.
@@ -59,10 +60,10 @@ class LLMTextAugmenter:
 
     Examples
     --------
-    # Gemini 3.1 Flash Lite (default)
+    # Gemini 3.5 Flash-Lite (default)
     augmenter = LLMTextAugmenter()
 
-    # OpenRouter – Qwen 3.6 Plus free tier
+    # OpenRouter free router
     cfg = TextAugmentationConfig(backend="openrouter")
     augmenter = LLMTextAugmenter(config=cfg)
 
@@ -106,12 +107,12 @@ class LLMTextAugmenter:
                     "Set GOOGLE_API_KEY or pass api_key."
                 )
             self._client = genai.Client(api_key=api_key)
-            self._gemini_gen_config = genai_types.GenerateContentConfig(
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-                top_k=self.config.top_k,
-                max_output_tokens=self.config.max_tokens,
-            )
+            generation = {"max_output_tokens": self.config.max_tokens}
+            version = re.search(r"gemini-(\d+)\.(\d+)", self.model_name)
+            if version is None or tuple(map(int, version.groups())) < (3, 5):
+                generation.update(temperature=self.config.temperature,
+                                  top_p=self.config.top_p, top_k=self.config.top_k)
+            self._gemini_gen_config = genai_types.GenerateContentConfig(**generation)
 
         # ── OpenRouter ────────────────────────────────────────────────────
         elif self.config.backend == "openrouter":
@@ -404,26 +405,26 @@ class ClassicalTextAugmenter:
 # ---------------------------------------------------------------------------
 
 def _make_llm_augmenter(backend: str, api_key: Optional[str], **kwargs) -> LLMTextAugmenter:
-    cfg = TextAugmentationConfig(backend=backend)
+    cfg = TextAugmentationConfig(backend=backend, model_name=kwargs.get("model_name"))
     return LLMTextAugmenter(api_key=api_key, config=cfg)
 
 def llm_paraphrase_augmentation(
     texts: List[str], api_key: Optional[str] = None, backend: str = "gemini", **kwargs
 ) -> List[List[str]]:
     """LLM-based paraphrase augmentation."""
-    return _make_llm_augmenter(backend, api_key).augment_batch(texts, "paraphrase")
+    return _make_llm_augmenter(backend, api_key, model_name=kwargs.get("model_name")).augment_batch(texts, "paraphrase")
 
 def llm_synonym_augmentation(
     texts: List[str], api_key: Optional[str] = None, backend: str = "gemini", **kwargs
 ) -> List[List[str]]:
     """LLM-based synonym substitution augmentation."""
-    return _make_llm_augmenter(backend, api_key).augment_batch(texts, "synonym")
+    return _make_llm_augmenter(backend, api_key, model_name=kwargs.get("model_name")).augment_batch(texts, "synonym")
 
 def llm_style_augmentation(
     texts: List[str], api_key: Optional[str] = None, backend: str = "gemini", **kwargs
 ) -> List[List[str]]:
     """LLM-based style variation augmentation."""
-    return _make_llm_augmenter(backend, api_key).augment_batch(texts, "style")
+    return _make_llm_augmenter(backend, api_key, model_name=kwargs.get("model_name")).augment_batch(texts, "style")
 
 def classical_synonym_augmentation(texts: List[str], **kwargs) -> List[List[str]]:
     a = ClassicalTextAugmenter()
@@ -467,10 +468,10 @@ TEXT_AUGMENTATION_REGISTRY usage
 ---------------------------------
 from ml_pipeline.data_augmentation.text_aug import TEXT_AUGMENTATION_REGISTRY
 
-# Gemini 3.1 Flash Lite (default)
+# Gemini 3.5 Flash-Lite (default)
 result = TEXT_AUGMENTATION_REGISTRY["llm_paraphrase"](texts=["Hello world"])
 
-# OpenRouter – Qwen 3.6 Plus free tier
+# OpenRouter free router
 result = TEXT_AUGMENTATION_REGISTRY["llm_paraphrase"](
     texts=["Hello world"], backend="openrouter"
 )

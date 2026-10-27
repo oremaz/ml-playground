@@ -180,7 +180,7 @@ def _model_parameters(factory, config, name, width, classes):
         params["random_seed"] = seed
     elif not name.startswith(("mlp", "deep_mlp", "constant_")):
         params["random_state"] = seed
-    if name.startswith(("tabicl", "tabfm")):
+    if name.startswith(("tabicl", "tabfm", "kumo")):
         params["device"] = config.get("device", "cpu")
     params.update(config.get("model_params", {}).get(name, {}))
     signature = inspect.signature(factory)
@@ -209,8 +209,9 @@ def _fit_method(name, augmentation, fold, train_X, validation_X, y, train, valid
             set_all_seeds(seed)
             model = registry[name](**_model_parameters(registry[name], config, name,
                                                       train_X.shape[1], len(np.unique(y))))
-            if config.get("strict_model_params") and hasattr(getattr(model, "model", None), "get_params"):
-                estimator = model.model.estimator if isinstance(model.model, MultiOutputRegressor) else model.model
+            native = getattr(model, "model", model)
+            if config.get("strict_model_params") and hasattr(native, "get_params"):
+                estimator = native.estimator if isinstance(native, MultiOutputRegressor) else native
                 unknown = set(config.get("model_params", {}).get(name, {})) - set(estimator.get_params())
                 if unknown:
                     raise ValueError(f"Unsupported parameters for {name}: {sorted(unknown)}")
@@ -245,6 +246,8 @@ def _fit_method(name, augmentation, fold, train_X, validation_X, y, train, valid
             scores.update({f"reference_{key}": value for key, value in reference["scores"].items()})
             metadata = {"model_name": name, "augmentation_name": augmentation, "task_type": task,
                         "fold": fold, "seed": seed, "epochs": int(config.get("epochs", 10))}
+            if hasattr(model, "model_metadata_"):
+                metadata["pretrained"] = model.model_metadata_
             with (output_dir / ".checkpoint.lock").open("a") as lock:
                 import fcntl
                 fcntl.flock(lock, fcntl.LOCK_EX)

@@ -1,5 +1,8 @@
 # Reasoning check on fixed finance measurements
 
+This is a retained study with its own recorded protocol and source version.
+See the [experiment index](../README.md) for how it relates to the latest runs.
+
 The earlier agent concluded that unsuccessful class weighting and tree-count
 changes suggested a feature ceiling or temporal shift. Those experiments do not
 identify either cause. Its review schema also required a hypothesis when

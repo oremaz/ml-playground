@@ -1,5 +1,8 @@
 # Three complementary CSV tasks
 
+This is a retained study with its own recorded protocol and source version.
+See the [experiment index](../README.md) for how it relates to the latest runs.
+
 The agent receives each CSV's bounded pandas profiles and an operational goal,
 proposes a configuration, writes preparation code, and requests model approval.
 One simulated user approves CPU Random Forest, LightGBM and XGBoost. The agent

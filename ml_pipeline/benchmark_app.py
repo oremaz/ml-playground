@@ -198,10 +198,15 @@ def _augmentation_registry():
 st.set_page_config(page_title="ML Benchmark UI", layout="wide")
 st.title("ML Benchmark UI")
 
-workflow = st.radio("Workflow", ["Assistant playground", "Manual benchmark"], horizontal=True)
+workflow = st.radio("Workflow", ["Assistant playground", "Standard comparison", "Manual benchmark"], horizontal=True)
 if workflow == "Assistant playground":
     from ml_pipeline.playground_app import render_playground
     render_playground()
+    st.stop()
+
+if workflow == "Standard comparison":
+    from ml_pipeline.standard_benchmark_app import render_standard_comparison
+    render_standard_comparison()
     st.stop()
 
 with st.sidebar:
